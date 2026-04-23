@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.SSE do
+defmodule Pado.LLMRouter.Providers.OpenAICodex.SSE do
   @moduledoc """
   SSE(Server-Sent Events) 스트림 파서.
 
