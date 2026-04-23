@@ -50,6 +50,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
       "model" => model.id,
       "store" => false,
       "stream" => true,
+      "instructions" => ctx.system_prompt || "",
       "input" => encode_messages(ctx.messages),
       "text" => %{"verbosity" => Keyword.get(opts, :verbosity, "medium")},
       "include" => ["reasoning.encrypted_content"],
@@ -57,7 +58,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
       "tool_choice" => Keyword.get(opts, :tool_choice, "auto"),
       "parallel_tool_calls" => Keyword.get(opts, :parallel_tool_calls, true)
     }
-    |> maybe_put("instructions", ctx.system_prompt)
     |> maybe_put("temperature", Keyword.get(opts, :temperature))
     |> maybe_put("tools", encode_tools(ctx.tools))
     |> maybe_put("reasoning", build_reasoning(opts))
