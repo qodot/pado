@@ -9,7 +9,7 @@ defmodule Pado.LLMRouter.Adapter do
   OAuth 쪽은 인증 발급·갱신만, Adapter는 실제 LLM 호출을 담당한다.
   """
 
-  alias Pado.LLMRouter.{Context, Event, Model}
+  alias Pado.LLMRouter.{Context, Model}
 
   @typedoc "스트림 이벤트 Enumerable. 지연 실행된다."
   @type event_stream :: Enumerable.t()
