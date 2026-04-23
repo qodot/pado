@@ -1,55 +1,124 @@
-# Pado.LLMRouter
+# Pado
 
-여러 LLM 프로바이더 API와 OAuth 플로우를 묶어 다루는 Elixir SDK.
-[`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)(TypeScript)와
-[`req_llm`](https://hex.pm/packages/req_llm)(Elixir)에서 영감을 받았다.
+> 서버사이드 LLM 에이전트를 OTP 위에서 짓기 위한 Elixir 생태계.
 
-> **상태:** 초기 단계 — OpenAI Codex(ChatGPT 구독) OAuth 로그인 플로우와
-> 크레덴셜 모델만 구현되어 있다. 스트리밍/completion API는 이후 마일스톤.
+`Pado`(파도)는 LLM 프로바이더 클라이언트부터 에이전트 런타임·웹 UI까지, 서버에서
+장기 실행되는 AI 에이전트를 만드는 데 필요한 계층을 쌓아 간다. 각 계층은 `Pado.*`
+네임스페이스 아래 독립된 하위 시스템으로 공존한다.
 
-## 지금 들어 있는 것
+> **상태: 초기 단계.** 현재 `Pado.LLMRouter`(LLM 프로바이더 API 클라이언트)만
+> 구현되어 있고, 그중에서도 OpenAI Codex(ChatGPT Plus/Pro 구독) OAuth 로그인과
+> 크레덴셜 모델만 갖춰져 있다. 실제 LLM 호출·스트리밍, 에이전트 루프, 웹 UI는
+> 아직 없다.
+
+---
+
+## 참고한 프로젝트
+
+Pado의 설계는 두 프로젝트에서 **강력한 영향**을 받았다. 개념 계층 대부분을
+그대로 빌려 왔고, 그 위에서 Elixir/OTP와 서버사이드 환경에 맞게 다시 빚었다.
+
+### [Pi (`@mariozechner/pi-mono`)](https://github.com/badlogic/pi-mono)
+
+Mario Zechner의 TypeScript 기반 터미널 코딩 에이전트.
+특히 다음 패키지들의 설계를 정독하고 가져왔다:
+
+- **`pi-ai`** — LLM 프로바이더 어댑터 레지스트리, OAuth 구독 로그인 플로우,
+  스트리밍 이벤트 추상. `Pado.LLMRouter`의 거의 모든 추상이 여기서 왔다.
+  OpenAI Codex OAuth 플로우(엔드포인트, 비표준 파라미터, JWT 클레임 구조)도
+  pi-ai의 `utils/oauth/openai-codex.ts`를 사실상 포트한 것이다.
+- **`pi-agent-core`** — 에이전트 루프(턴 반복, 도구 실행, steer/followUp
+  메시지 큐잉, 세분화된 `AgentEvent` 스트림). 향후 `Pado.Agent`가 참조할 설계.
+
+### [Jido (`agentjido/jido`, `jido_ai`, `jido_action`)](https://github.com/agentjido/jido)
+
+Mike Hostetler의 Elixir 자율 에이전트 프레임워크.
+OTP 위에서 상태 있는 에이전트를 **불변 `cmd/2` + Directive + Signal 라우팅 +
+AgentServer**로 정렬한 모델을 참고한다. 특히:
+
+- **`jido`(코어)** — 감독트리 통합, 파티션 멀티테넌시, 스케줄러, 플러그인.
+  향후 `Pado.Agent`의 런타임 기반.
+- **`jido_ai`** — ReAct 전략, Request/Run/Iteration 개념 계층, 체크포인트 재개.
+- **`jido_action`** — 검증된 Action이 LLM 도구로도 쓰이는 이중 역할.
+
+### 그 외
+
+- **[`req_llm`](https://hex.pm/packages/req_llm)** — Elixir용 멀티 프로바이더
+  LLM HTTP 클라이언트. 장기적으로 `Pado.LLMRouter`의 일부 프로바이더를
+  `req_llm` 어댑터로 위임할 가능성을 열어 둔다.
+
+> 위 프로젝트들은 각자의 철학·실행 모델이 다르고, 이 저장소에도 그 차이의 흔적이
+> 그대로 녹아 있다. Pado는 두 설계의 복제가 아니라, **"Pi의 API 모양 + Jido의
+> OTP 런타임"** 을 이식하려는 시도다.
+
+---
+
+## 왜 Pado인가
+
+네 가지 전제에서 출발한다.
+
+1. **실행 환경은 서버사이드다.** 터미널 CLI가 아니라 장기 실행되는 Elixir
+   애플리케이션 안에서 에이전트가 돈다.
+2. **멀티 에이전트·멀티테넌시가 자연스러워야 한다.** 세션별로 격리된 프로세스,
+   감독트리, 파티션이 필요하면 Jido의 원시요소를 그대로 쓴다.
+3. **사용자 상호작용은 주로 웹 UI**(Phoenix LiveView)다. 따라서 이벤트 스트림은
+   PubSub/Channel과 자연스럽게 맞물려야 한다.
+4. **LLM 프로바이더·OAuth 세부사항은 한 번 쓰고 잊고 싶다.** Pi의 pi-ai가 이미
+   만들어 둔 것을 Elixir 관용구로 옮기면 된다.
+
+이 조합은 Pi에도 Jido에도 그대로 존재하지 않는다. 둘의 공통 부분집합에 OTP 운영성
+위에서 서버사이드 UX를 얹는 것이 Pado가 메우려는 빈칸이다.
+
+---
+
+## 생태계 구조
+
+`Pado`는 생태계 진입점 모듈이고, 실제 기능은 하위 시스템에 들어간다.
+
+| 하위 시스템 | 상태 | 대응하는 참고 구현 |
+|---|---|---|
+| `Pado.LLMRouter` | **구현 중** (OAuth만) | `pi-ai`, `req_llm` |
+| `Pado.Agent` | 미착수 | `pi-agent-core`, `jido` + `jido_ai` |
+| `Pado.Web` | 미착수 | (Pi의 `web-ui`, LiveView 통합) |
+
+하위 시스템은 같은 저장소(`qodot/pado`)에서 관리되며, 필요해지면 별도 Hex
+패키지로 분리할 수 있도록 네임스페이스부터 격리해 둔다.
+
+---
+
+## `Pado.LLMRouter` — 현재 구현된 것
 
 | 모듈 | 역할 |
 |---|---|
-| `Pado.LLMRouter.OAuth.Provider` | OAuth 프로바이더 behaviour |
-| `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체와 JSON 직렬화 |
+| `Pado.LLMRouter.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
+| `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
 | `Pado.LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
-| `Pado.LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro(Codex) 로그인 · 갱신 |
-| `Pado.LLMRouter.OAuth.CallbackServer` | 일회성 `127.0.0.1:1455` 리스너 |
-| `Mix.Tasks.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
+| `Pado.LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) 로그인·갱신 |
+| `Pado.LLMRouter.OAuth.CallbackServer` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
+| `Mix.Tasks.Pado.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
 
-## 설계 요약
+### 설계 메모
 
-OAuth 플로우에는 피할 수 없는 제약이 둘 있다.
+- **라이브러리는 어떤 영속 저장소도 소유하지 않는다.** `login/2`는
+  `%Credentials{}`를 반환할 뿐이고, 저장·갱신·로테이션 관리는 호출자(서비스 앱)
+  책임이다. Pi가 `pi-coding-agent`의 `AuthStorage`에 그 책임을 분리해 둔 것과
+  같은 원칙.
+- **콜백 서버는 라이브러리 안에 내장**되어 있다. OpenAI의 `redirect_uri`가
+  `http://localhost:1455/auth/callback`으로 서버에 등록되어 있어 우회할 수 없는
+  프로토콜 상수이기 때문이다. 다만 UI·저장·프롬프트는 전부 호출자가 주입하는
+  콜백 맵으로 분리된다.
+- **`:bandit`/`:plug`는 선택 의존성**이다. 이미 크레덴셜을 가진 서비스(예:
+  Vault에서 로드)는 콜백 서버를 깔 필요가 없다.
 
-1. **`redirect_uri`는 서버에 등록되어 있다.** OpenAI Codex simplified
-   플로우는 `http://localhost:1455/auth/callback`을 요구한다. 즉
-   로그인은 브라우저가 있는 머신에서 실행되어야 한다.
-2. **토큰은 어딘가에 저장되어야 한다.** 그 "어딘가"는 dotfile, Vault,
-   시크릿 매니저, DB 등 환경마다 다르다.
+### 사용 방법
 
-Pado.LLMRouter는 이 두 제약을 존중하도록 책임을 분리한다.
-
-- 라이브러리는 **OAuth 프로토콜을 실행**(`OpenAICodex.login/2`)하고,
-  수명이 짧은 HTTP 콜백 리스너를 내부에서 띄운다. 사용자 상호작용
-  (브라우저 열기·프롬프트·진행 알림)은 모두 `callbacks` 맵으로 주입한다.
-- 라이브러리는 **크레덴셜을 저장하지 않는다.** `login/2`는
-  `%Credentials{}` 구조체를 돌려줄 뿐이며, 이후 저장과 갱신은 호출자
-  결정이다.
-- Mix task는 그 최소한을 구현한 레퍼런스 CLI다. 크레덴셜을 JSON으로
-  stdout에 출력한다. 환경마다 한 번 돌려 출력 값을 원하는 저장소에
-  둔다.
-
-## 사용 방법
-
-### 1. 크레덴셜 발급(환경 당 1회)
+#### 1. 크레덴셜 발급 (환경당 1회, 브라우저가 있는 머신)
 
 ```bash
-$ mix pado.pado.llm_router.login > ~/.config/pado/openai.json
+$ mix pado.llm_router.login > ~/.config/pado/openai.json
 ```
 
-브라우저가 열리고 `localhost:1455`로 콜백이 돌아오면, 코드를 교환한 뒤
-다음과 같은 JSON을 출력한다.
+브라우저가 열리고 `localhost:1455`로 콜백이 돌아오면 다음과 같은 JSON이 출력된다:
 
 ```json
 {
@@ -61,37 +130,38 @@ $ mix pado.pado.llm_router.login > ~/.config/pado/openai.json
 }
 ```
 
-### 2. 앱에서 로드·갱신
+#### 2. 앱에서 로드 + 자동 갱신
 
 ```elixir
-creds =
+alias Pado.LLMRouter.OAuth.{Credentials, OpenAICodex}
+
+{:ok, creds} =
   "~/.config/pado/openai.json"
   |> Path.expand()
   |> File.read!()
   |> Jason.decode!()
-  |> Pado.LLMRouter.OAuth.Credentials.from_map()
-  |> then(fn {:ok, c} -> c end)
+  |> Credentials.from_map()
 
 creds =
-  if Pado.LLMRouter.OAuth.Credentials.stale?(creds, 60) do
-    {:ok, refreshed} = Pado.LLMRouter.OAuth.OpenAICodex.refresh(creds)
-    File.write!(path, Jason.encode!(Pado.LLMRouter.OAuth.Credentials.to_map(refreshed)))
+  if Credentials.stale?(creds, 60) do
+    {:ok, refreshed} = OpenAICodex.refresh(creds)
+    File.write!(path, Jason.encode!(Credentials.to_map(refreshed)))
     refreshed
   else
     creds
   end
 
-access_token = Pado.LLMRouter.OAuth.OpenAICodex.api_key(creds)
+access_token = OpenAICodex.api_key(creds)
 ```
 
-> **주의:** 매 갱신마다 서버가 새 `refresh_token`을 발급한다(로테이션).
-> 반환된 크레덴셜을 반드시 다시 저장해야 다음 갱신이 가능하다.
+> 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).
+> 반환된 크레덴셜을 반드시 저장해야 다음 갱신이 가능하다.
 
-### 3. `login/2`를 직접 호출하기(Mix task 없이)
+#### 3. `login/2`를 직접 호출 (Mix task 없이)
 
 ```elixir
 callbacks = %{
-  on_auth: fn %{url: url} -> IO.puts("브라우저에서 이 URL을 여세요: #{url}") end,
+  on_auth: fn %{url: url} -> IO.puts("이 URL을 여세요: #{url}") end,
   on_prompt: fn %{message: m} ->
     {:ok, IO.gets(m) |> String.trim()}
   end,
@@ -101,15 +171,35 @@ callbacks = %{
 {:ok, creds} = Pado.LLMRouter.OAuth.OpenAICodex.login(callbacks)
 ```
 
-## 선택 의존성
+---
 
-`:bandit`과 `:plug`는 `optional: true`로 선언되어 있다. 로그인 플로우를
-실제로 실행할 때만 필요하다. 이미 크레덴셜을 가지고 있는 서비스(부팅 시
-Vault에서 읽고 인프로세스에서 갱신)는 설치하지 않아도 된다.
+## 로드맵
+
+구체적 약속이 아니라 방향성 스케치.
+
+- **Pado.LLMRouter 스트리밍** — `stream_text/3`, SSE 파서, `/codex/responses`
+  엔드포인트 클라이언트. Anthropic 직접 API 어댑터 추가.
+- **Pado.Agent** — `use Jido.Agent` 위에 Pi 스타일 에이전트 루프(턴 반복,
+  도구 실행, steer/followUp 큐, 세분화된 이벤트 스트림)를 얇게 얹음.
+  `jido_ai`의 ReAct 전략을 그대로 쓰기보다 루프 의사결정을 소유하는 쪽으로 기운다.
+- **Pado.Web** — LiveView용 `Pado.Agent` 바인딩. 1:1 사용자 세션을 스트림 직접
+  소비 방식으로 렌더.
+
+---
 
 ## 설치
 
-아직 Hex에 올라가 있지 않다. path 의존성으로 사용한다.
+아직 Hex에 게시되지 않았다. path 또는 git 의존성으로 사용한다.
+
+```elixir
+def deps do
+  [
+    {:pado, github: "qodot/pado", branch: "main"}
+  ]
+end
+```
+
+또는 모노레포 안이라면:
 
 ```elixir
 def deps do
@@ -119,10 +209,31 @@ def deps do
 end
 ```
 
-## 출처
+---
 
-OpenAI Codex OAuth 플로우(엔드포인트, 비표준 쿼리 파라미터, JWT 클레임
-구조, 콜백 UX)는 pi-mono 저자들이 역공학해 문서화한 경로다. 이
-라이브러리는 그 구조를 그대로 따라가므로, 양쪽에서 만든 크레덴셜은
-`Credentials.from_map/1`의 `expires_at` 변환 헬퍼를 거치면 상호
-호환된다.
+## 프로젝트 지침
+
+- 모든 문서·주석·커밋 메시지는 **한국어**로 작성한다.
+- 커밋은 작은 단위로 쪼개고, Conventional Commits prefix(`feat:`, `fix:`,
+  `refactor:`, `docs:`, …)를 쓰되 설명은 한국어로.
+- 코드 식별자는 영어를 유지한다.
+
+자세한 규칙은 `AGENTS.md` 참고.
+
+---
+
+## 출처와 감사
+
+`Pado.LLMRouter.OAuth.OpenAICodex`의 동작(엔드포인트, 비표준 `authorize`
+파라미터, JWT 클레임 구조, 콜백 UX)은 **pi-mono 저자들이 역공학해 공개한 경로**를
+그대로 따른다. 같은 구조를 따르므로, 양쪽에서 만든 크레덴셜은
+`Credentials.from_map/1`의 `expires_at` 변환을 거치면 상호 호환된다.
+
+Pi와 Jido가 없었다면 Pado는 지금의 설계에 훨씬 오래 걸려 도달했을 것이다.
+두 프로젝트 저자들에게 감사를 표한다.
+
+---
+
+## 라이선스
+
+MIT. (추가 예정: `LICENSE` 파일)
