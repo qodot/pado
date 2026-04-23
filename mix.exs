@@ -25,6 +25,7 @@ defmodule Pado.MixProject do
     [
       # 핵심 의존성
       {:req, "~> 0.5"},
+      {:finch, "~> 0.18"},
       {:jason, "~> 1.4"},
 
       # OAuth 콜백 서버(선택 의존성) — `Pado.LLMRouter.OAuth.*.login/2` 또는
