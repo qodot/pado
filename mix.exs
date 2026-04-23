@@ -1,9 +1,9 @@
-defmodule LLMRouter.MixProject do
+defmodule Pado.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :llm_router,
+      app: :pado,
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
@@ -27,8 +27,8 @@ defmodule LLMRouter.MixProject do
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
 
-      # OAuth 콜백 서버(선택 의존성) — `LLMRouter.OAuth.*.login/2` 또는
-      # `mix llm_router.login`을 실제로 실행할 때만 필요하다.
+      # OAuth 콜백 서버(선택 의존성) — `Pado.LLMRouter.OAuth.*.login/2` 또는
+      # `mix pado.pado.llm_router.login`을 실제로 실행할 때만 필요하다.
       {:bandit, "~> 1.5", optional: true},
       {:plug, "~> 1.16", optional: true},
 

@@ -1,4 +1,4 @@
-defmodule LLMRouter.OAuth.Provider do
+defmodule Pado.LLMRouter.OAuth.Provider do
   @moduledoc """
   OAuth 기반 LLM 프로바이더의 behaviour.
 
@@ -17,14 +17,14 @@ defmodule LLMRouter.OAuth.Provider do
   ## 설계 메모
 
   * 이 behaviour는 크레덴셜이 어디에 저장되는지를 규정하지 않는다.
-    `c:login/2`는 `LLMRouter.OAuth.Credentials.t/0`만 돌려준다.
+    `c:login/2`는 `Pado.LLMRouter.OAuth.Credentials.t/0`만 돌려준다.
   * `localhost` redirect URI를 쓰는 프로바이더
     (`uses_callback_server?/0 == true`)는 내부에서 단명 HTTP 리스너를
-    띄우도록 기대된다. `LLMRouter.OAuth.CallbackServer`를 쓰는 것이
+    띄우도록 기대된다. `Pado.LLMRouter.OAuth.CallbackServer`를 쓰는 것이
     표준 경로다. 이는 정책 선택이 아니라 OAuth 프로토콜 자체의 제약이다.
   """
 
-  alias LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.OAuth.Credentials
 
   @typedoc """
   로그인 플로우 시작 시점에 사용자에게 전달되는 정보.

@@ -1,10 +1,10 @@
-defmodule LLMRouter.OAuth.OpenAICodex do
+defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   @moduledoc """
   OpenAI Codex("simplified") 플로우로 로그인한다. ChatGPT Plus/Pro
   구독 자격으로 인증해 `https://chatgpt.com/backend-api/codex/responses`
   엔드포인트에 쓸 토큰을 발급받는 경로다.
 
-  `LLMRouter.OAuth.Provider`를 구현한다. 구조는 pi-ai의
+  `Pado.LLMRouter.OAuth.Provider`를 구현한다. 구조는 pi-ai의
   `utils/oauth/openai-codex.ts`를 거의 그대로 옮긴 것이다.
 
   ## 공용 public 클라이언트
@@ -30,9 +30,9 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   넘긴다.
   """
 
-  @behaviour LLMRouter.OAuth.Provider
+  @behaviour Pado.LLMRouter.OAuth.Provider
 
-  alias LLMRouter.OAuth.{CallbackServer, Credentials, PKCE}
+  alias Pado.LLMRouter.OAuth.{CallbackServer, Credentials, PKCE}
 
   require Logger
 

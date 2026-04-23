@@ -1,8 +1,8 @@
-defmodule LLMRouter.OAuth.CallbackServer do
+defmodule Pado.LLMRouter.OAuth.CallbackServer do
   @moduledoc """
   OAuth 인가 콜백을 받는 일회성 HTTP 리스너.
 
-  `LLMRouter.OAuth.OpenAICodex` 등이 사용하는 공용 public OAuth
+  `Pado.LLMRouter.OAuth.OpenAICodex` 등이 사용하는 공용 public OAuth
   클라이언트의 redirect URI로 등록된 `http://127.0.0.1:1455/auth/callback`
   에 바인딩하고, 수신한 인가 코드를 호출자 프로세스에 메시지로 전달한다.
 
@@ -13,9 +13,9 @@ defmodule LLMRouter.OAuth.CallbackServer do
 
   ## 선택 의존성
 
-  `:bandit`과 `:plug`는 `:llm_router`의 **선택** 의존성이다. 로그인
+  `:bandit`과 `:plug`는 `:pado`의 **선택** 의존성이다. 로그인
   플로우를 실제로 시작할 때(즉 `mix llm_router.login` 또는
-  `c:LLMRouter.OAuth.Provider.login/2` 호출 시)에만 필요하다. 이미
+  `c:Pado.LLMRouter.OAuth.Provider.login/2` 호출 시)에만 필요하다. 이미
   크레덴셜을 가지고 있는 소비자(예: Vault에서 읽는 서버 앱)는 설치할
   필요가 없다.
 
@@ -24,15 +24,15 @@ defmodule LLMRouter.OAuth.CallbackServer do
 
   ## 사용
 
-      state = LLMRouter.OAuth.PKCE.state()
-      {:ok, server} = LLMRouter.OAuth.CallbackServer.start(state)
+      state = Pado.LLMRouter.OAuth.PKCE.state()
+      {:ok, server} = Pado.LLMRouter.OAuth.CallbackServer.start(state)
       # ... 사용자 브라우저를 authorize URL로 유도 ...
-      case LLMRouter.OAuth.CallbackServer.await_code(server, timeout: 120_000) do
+      case Pado.LLMRouter.OAuth.CallbackServer.await_code(server, timeout: 120_000) do
         {:ok, code} -> # 코드 교환
         {:error, :timeout} -> # 사용자가 완료하지 않음
         {:error, reason} -> # state 불일치, 코드 누락 등
       end
-      LLMRouter.OAuth.CallbackServer.stop(server)
+      Pado.LLMRouter.OAuth.CallbackServer.stop(server)
 
   ## 메시지
 
@@ -81,7 +81,7 @@ defmodule LLMRouter.OAuth.CallbackServer do
     plug_opts = %{parent: parent, ref: ref, expected_state: expected_state}
 
     bandit_opts = [
-      plug: {LLMRouter.OAuth.CallbackServer.Plug, plug_opts},
+      plug: {Pado.LLMRouter.OAuth.CallbackServer.Plug, plug_opts},
       port: port,
       ip: host,
       startup_log: false
@@ -141,7 +141,7 @@ defmodule LLMRouter.OAuth.CallbackServer do
     cond do
       not Code.ensure_loaded?(Bandit) ->
         raise """
-        LLMRouter.OAuth.CallbackServer를 쓰려면 :bandit이 필요합니다.
+        Pado.LLMRouter.OAuth.CallbackServer를 쓰려면 :bandit이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
@@ -151,17 +151,17 @@ defmodule LLMRouter.OAuth.CallbackServer do
 
       not Code.ensure_loaded?(Plug) ->
         raise """
-        LLMRouter.OAuth.CallbackServer를 쓰려면 :plug이 필요합니다.
+        Pado.LLMRouter.OAuth.CallbackServer를 쓰려면 :plug이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
             {:plug, "~> 1.16"}
         """
 
-      not Code.ensure_loaded?(LLMRouter.OAuth.CallbackServer.Plug) ->
+      not Code.ensure_loaded?(Pado.LLMRouter.OAuth.CallbackServer.Plug) ->
         # 방어적 체크: 하위 Plug 모듈은 :plug이 있을 때만 컴파일된다.
         raise """
-        LLMRouter.OAuth.CallbackServer.Plug가 컴파일되지 않았습니다.
+        Pado.LLMRouter.OAuth.CallbackServer.Plug가 컴파일되지 않았습니다.
         컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
         받고 재컴파일하세요.
         """
@@ -176,12 +176,12 @@ end
 # `:plug`/`:bandit`을 설치하지 않은 소비자도 라이브러리의 비-로그인
 # 기능(refresh 등)을 그대로 사용할 수 있다.
 if Code.ensure_loaded?(Plug) do
-  defmodule LLMRouter.OAuth.CallbackServer.Plug do
+  defmodule Pado.LLMRouter.OAuth.CallbackServer.Plug do
     @moduledoc false
     @behaviour Plug
 
     import Plug.Conn
-    alias LLMRouter.OAuth.OAuthPage
+    alias Pado.LLMRouter.OAuth.OAuthPage
 
     @impl Plug
     def init(opts), do: opts

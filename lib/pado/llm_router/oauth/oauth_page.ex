@@ -1,4 +1,4 @@
-defmodule LLMRouter.OAuth.OAuthPage do
+defmodule Pado.LLMRouter.OAuth.OAuthPage do
   @moduledoc """
   OAuth 콜백 랜딩 페이지를 위한 최소 HTML 템플릿.
 

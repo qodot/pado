@@ -1,4 +1,4 @@
-defmodule LLMRouter.OAuth.PKCE do
+defmodule Pado.LLMRouter.OAuth.PKCE do
   @moduledoc """
   RFC 7636 기반의 PKCE(Proof Key for Code Exchange) 헬퍼.
 

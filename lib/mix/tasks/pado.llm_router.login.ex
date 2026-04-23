@@ -1,10 +1,10 @@
-defmodule Mix.Tasks.LlmRouter.Login do
+defmodule Mix.Tasks.Pado.LlmRouter.Login do
   @moduledoc """
   LLM OAuth 프로바이더에 로그인해 크레덴셜을 JSON으로 출력한다.
 
-      $ mix llm_router.login                      # 기본값: openai-codex
-      $ mix llm_router.login openai-codex
-      $ mix llm_router.login --output creds.json
+      $ mix pado.llm_router.login                      # 기본값: openai-codex
+      $ mix pado.llm_router.login openai-codex
+      $ mix pado.llm_router.login --output creds.json
 
   라이브러리의 콜백 인터페이스를 터미널 I/O에 배선한 최소 레퍼런스 CLI다.
   pi-ai의 `packages/ai/src/cli.ts`와 대응된다.
@@ -31,13 +31,13 @@ defmodule Mix.Tasks.LlmRouter.Login do
 
   use Mix.Task
 
-  alias LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.OAuth.Credentials
 
   @shortdoc "LLM OAuth 프로바이더에 로그인하고 크레덴셜을 JSON으로 출력한다"
 
   @provider_aliases %{
-    "openai-codex" => LLMRouter.OAuth.OpenAICodex,
-    "openai_codex" => LLMRouter.OAuth.OpenAICodex
+    "openai-codex" => Pado.LLMRouter.OAuth.OpenAICodex,
+    "openai_codex" => Pado.LLMRouter.OAuth.OpenAICodex
   }
 
   @switches [
@@ -71,7 +71,7 @@ defmodule Mix.Tasks.LlmRouter.Login do
 
   # --- 배선 ---
 
-  defp resolve_provider([]), do: LLMRouter.OAuth.OpenAICodex
+  defp resolve_provider([]), do: Pado.LLMRouter.OAuth.OpenAICodex
 
   defp resolve_provider([alias_name | _]) do
     case Map.fetch(@provider_aliases, alias_name) do

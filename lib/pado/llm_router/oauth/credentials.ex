@@ -1,4 +1,4 @@
-defmodule LLMRouter.OAuth.Credentials do
+defmodule Pado.LLMRouter.OAuth.Credentials do
   @moduledoc """
   OAuth 크레덴셜 값 객체.
 
