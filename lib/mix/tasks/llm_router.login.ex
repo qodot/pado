@@ -1,40 +1,39 @@
 defmodule Mix.Tasks.LlmRouter.Login do
   @moduledoc """
-  Logs in to an LLM OAuth provider and prints the resulting credentials
-  as JSON on stdout.
+  LLM OAuth 프로바이더에 로그인해 크레덴셜을 JSON으로 출력한다.
 
-      $ mix llm_router.login                      # defaults to openai-codex
+      $ mix llm_router.login                      # 기본값: openai-codex
       $ mix llm_router.login openai-codex
       $ mix llm_router.login --output creds.json
 
-  The task is the minimal reference CLI that wires the library's
-  callback interface to terminal I/O. Mirrors pi-ai's `packages/ai/src/cli.ts`.
+  라이브러리의 콜백 인터페이스를 터미널 I/O에 배선한 최소 레퍼런스 CLI다.
+  pi-ai의 `packages/ai/src/cli.ts`와 대응된다.
 
-  ## Why is this a Mix task?
+  ## 왜 Mix task인가?
 
-  Because the OAuth `redirect_uri` for the shared public OAuth clients
-  is registered as `http://localhost:1455/auth/callback`, the browser
-  used for login must be on the same machine that runs this task. Mix
-  tasks are a natural fit: developer-operated, short-lived, with access
-  to stdout.
+  공용 public OAuth 클라이언트의 `redirect_uri`가
+  `http://localhost:1455/auth/callback`으로 등록되어 있기 때문에,
+  로그인을 시작하는 머신에 브라우저가 있어야 한다. Mix task는 이
+  요건과 잘 맞는다. 개발자가 수동으로 돌리고, 짧은 수명을 가지며,
+  stdout에 접근할 수 있다.
 
-  The task is **not** how you consume credentials at runtime: it only
-  mints them. Persist the printed JSON somewhere (a dotfile, Vault,
-  secrets manager) and load it into your running service at boot.
+  이 task는 **런타임에 크레덴셜을 쓰는 방법이 아니라** 발급 전용이다.
+  출력된 JSON을 원하는 저장소(dotfile, Vault, 시크릿 매니저 등)에
+  보관하고, 서비스 기동 시 그것을 로드한다.
 
-  ## Options
+  ## 옵션
 
-    * `--output <path>` — write JSON to a file instead of stdout.
-    * `--originator <id>` — override the OAuth `originator` parameter.
-    * `--timeout <ms>` — override the 5-minute default wait.
-    * `--no-browser` — do not attempt to open a browser automatically.
+    * `--output <path>` — stdout 대신 파일에 JSON을 쓴다.
+    * `--originator <id>` — OAuth `originator` 파라미터를 덮어쓴다.
+    * `--timeout <ms>` — 기본 5분 대기 시간을 덮어쓴다.
+    * `--no-browser` — 브라우저 자동 열기를 끈다.
   """
 
   use Mix.Task
 
   alias LLMRouter.OAuth.Credentials
 
-  @shortdoc "Login to an LLM OAuth provider; print credentials as JSON"
+  @shortdoc "LLM OAuth 프로바이더에 로그인하고 크레덴셜을 JSON으로 출력한다"
 
   @provider_aliases %{
     "openai-codex" => LLMRouter.OAuth.OpenAICodex,
@@ -65,12 +64,12 @@ defmodule Mix.Tasks.LlmRouter.Login do
         write_output(creds, opts[:output])
 
       {:error, reason} ->
-        Mix.shell().error("Login failed: #{format_error(reason)}")
+        Mix.shell().error("로그인 실패: #{format_error(reason)}")
         exit({:shutdown, 1})
     end
   end
 
-  # --- wiring ---
+  # --- 배선 ---
 
   defp resolve_provider([]), do: LLMRouter.OAuth.OpenAICodex
 
@@ -80,8 +79,8 @@ defmodule Mix.Tasks.LlmRouter.Login do
         mod
 
       :error ->
-        Mix.shell().error("Unknown provider: #{alias_name}")
-        Mix.shell().info("Available: #{Enum.join(Map.keys(@provider_aliases), ", ")}")
+        Mix.shell().error("알 수 없는 프로바이더: #{alias_name}")
+        Mix.shell().info("사용 가능: #{Enum.join(Map.keys(@provider_aliases), ", ")}")
         exit({:shutdown, 1})
     end
   end
@@ -100,7 +99,7 @@ defmodule Mix.Tasks.LlmRouter.Login do
       on_auth: fn %{url: url} = info ->
         instructions = Map.get(info, :instructions)
         Mix.shell().info("")
-        Mix.shell().info("Open this URL in your browser:")
+        Mix.shell().info("아래 URL을 브라우저에서 열어주세요:")
         Mix.shell().info(url)
         if instructions, do: Mix.shell().info(instructions)
         Mix.shell().info("")
@@ -136,7 +135,7 @@ defmodule Mix.Tasks.LlmRouter.Login do
     end
   end
 
-  # --- output ---
+  # --- 출력 ---
 
   defp write_output(%Credentials{} = creds, nil) do
     creds
@@ -153,10 +152,10 @@ defmodule Mix.Tasks.LlmRouter.Login do
 
     File.write!(path, json)
 
-    # Tighten permissions — credentials are sensitive.
+    # 크레덴셜은 민감 정보이므로 권한을 조인다.
     _ = File.chmod(path, 0o600)
 
-    Mix.shell().info("Credentials written to #{path}")
+    Mix.shell().info("크레덴셜을 #{path} 에 기록했습니다.")
   end
 
   defp format_error(reason) when is_atom(reason) or is_binary(reason), do: inspect(reason)

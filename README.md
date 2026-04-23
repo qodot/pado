@@ -1,53 +1,55 @@
 # LLMRouter
 
-Elixir SDK for routing requests to LLM provider APIs. Inspired by
-[`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)
-(TypeScript) and [`req_llm`](https://hex.pm/packages/req_llm).
+여러 LLM 프로바이더 API와 OAuth 플로우를 묶어 다루는 Elixir SDK.
+[`@mariozechner/pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)(TypeScript)와
+[`req_llm`](https://hex.pm/packages/req_llm)(Elixir)에서 영감을 받았다.
 
-> **Status:** early — OAuth login flow (OpenAI Codex subscription) and
-> credential model only. Streaming/completion APIs to follow.
+> **상태:** 초기 단계 — OpenAI Codex(ChatGPT 구독) OAuth 로그인 플로우와
+> 크레덴셜 모델만 구현되어 있다. 스트리밍/completion API는 이후 마일스톤.
 
-## What's here
+## 지금 들어 있는 것
 
-| Module | Role |
+| 모듈 | 역할 |
 |---|---|
-| `LLMRouter.OAuth.Provider` | Behaviour for OAuth-based providers |
-| `LLMRouter.OAuth.Credentials` | Credential struct + JSON (de)serialisation |
-| `LLMRouter.OAuth.PKCE` | RFC 7636 verifier/challenge/state |
-| `LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) login/refresh |
-| `LLMRouter.OAuth.CallbackServer` | One-shot `127.0.0.1:1455` listener |
-| `Mix.Tasks.LlmRouter.Login` | Reference CLI that wires callbacks to stdin/stdout |
+| `LLMRouter.OAuth.Provider` | OAuth 프로바이더 behaviour |
+| `LLMRouter.OAuth.Credentials` | 크레덴셜 구조체와 JSON 직렬화 |
+| `LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
+| `LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro(Codex) 로그인 · 갱신 |
+| `LLMRouter.OAuth.CallbackServer` | 일회성 `127.0.0.1:1455` 리스너 |
+| `Mix.Tasks.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
 
-## Design at a glance
+## 설계 요약
 
-OAuth flows have two inescapable constraints:
+OAuth 플로우에는 피할 수 없는 제약이 둘 있다.
 
-1. **`redirect_uri` is server-registered.** OpenAI's Codex simplified flow
-   requires `http://localhost:1455/auth/callback`, which means the login
-   must happen on the machine that has a browser.
-2. **Tokens must be stored somewhere.** That "somewhere" varies — a
-   dotfile, Vault, a secret manager, a DB.
+1. **`redirect_uri`는 서버에 등록되어 있다.** OpenAI Codex simplified
+   플로우는 `http://localhost:1455/auth/callback`을 요구한다. 즉
+   로그인은 브라우저가 있는 머신에서 실행되어야 한다.
+2. **토큰은 어딘가에 저장되어야 한다.** 그 "어딘가"는 dotfile, Vault,
+   시크릿 매니저, DB 등 환경마다 다르다.
 
-LLMRouter therefore splits responsibilities cleanly:
+LLMRouter는 이 두 제약을 존중하도록 책임을 분리한다.
 
-- The library **runs the OAuth protocol** (`OpenAICodex.login/2`) and
-  owns the short-lived HTTP callback listener. All user interaction
-  (browser, prompts, progress) is injected via a `callbacks` map.
-- The library **does not store** credentials. `login/2` returns a
-  `%Credentials{}` struct; the caller decides what to do with it.
-- The Mix task is a minimal reference CLI that prints the credentials as
-  JSON to stdout. Use it once per environment, capture the output.
+- 라이브러리는 **OAuth 프로토콜을 실행**(`OpenAICodex.login/2`)하고,
+  수명이 짧은 HTTP 콜백 리스너를 내부에서 띄운다. 사용자 상호작용
+  (브라우저 열기·프롬프트·진행 알림)은 모두 `callbacks` 맵으로 주입한다.
+- 라이브러리는 **크레덴셜을 저장하지 않는다.** `login/2`는
+  `%Credentials{}` 구조체를 돌려줄 뿐이며, 이후 저장과 갱신은 호출자
+  결정이다.
+- Mix task는 그 최소한을 구현한 레퍼런스 CLI다. 크레덴셜을 JSON으로
+  stdout에 출력한다. 환경마다 한 번 돌려 출력 값을 원하는 저장소에
+  둔다.
 
-## Usage
+## 사용 방법
 
-### 1. Mint credentials (once per user/environment)
+### 1. 크레덴셜 발급(환경 당 1회)
 
 ```bash
 $ mix llm_router.login > ~/.config/llm-router/openai.json
 ```
 
-That opens a browser, waits for the callback on `localhost:1455`, exchanges
-the code, and prints a JSON document like:
+브라우저가 열리고 `localhost:1455`로 콜백이 돌아오면, 코드를 교환한 뒤
+다음과 같은 JSON을 출력한다.
 
 ```json
 {
@@ -59,7 +61,7 @@ the code, and prints a JSON document like:
 }
 ```
 
-### 2. Load + refresh in your app
+### 2. 앱에서 로드·갱신
 
 ```elixir
 creds =
@@ -82,14 +84,14 @@ creds =
 access_token = LLMRouter.OAuth.OpenAICodex.api_key(creds)
 ```
 
-> **Note:** every refresh returns a *new* `refresh_token` (rotation).
-> Always persist the returned credentials.
+> **주의:** 매 갱신마다 서버가 새 `refresh_token`을 발급한다(로테이션).
+> 반환된 크레덴셜을 반드시 다시 저장해야 다음 갱신이 가능하다.
 
-### 3. Calling `login/2` yourself (without the Mix task)
+### 3. `login/2`를 직접 호출하기(Mix task 없이)
 
 ```elixir
 callbacks = %{
-  on_auth: fn %{url: url} -> IO.puts("open: #{url}") end,
+  on_auth: fn %{url: url} -> IO.puts("브라우저에서 이 URL을 여세요: #{url}") end,
   on_prompt: fn %{message: m} ->
     {:ok, IO.gets(m) |> String.trim()}
   end,
@@ -99,16 +101,15 @@ callbacks = %{
 {:ok, creds} = LLMRouter.OAuth.OpenAICodex.login(callbacks)
 ```
 
-## Optional dependencies
+## 선택 의존성
 
-`:bandit` and `:plug` are declared `optional: true`. They are only
-required when you actually run a login flow. Services that already hold
-credentials (read from Vault at boot, refreshed in-process) do not need
-them.
+`:bandit`과 `:plug`는 `optional: true`로 선언되어 있다. 로그인 플로우를
+실제로 실행할 때만 필요하다. 이미 크레덴셜을 가지고 있는 서비스(부팅 시
+Vault에서 읽고 인프로세스에서 갱신)는 설치하지 않아도 된다.
 
-## Installation
+## 설치
 
-Not on Hex yet. Use as a path dependency:
+아직 Hex에 올라가 있지 않다. path 의존성으로 사용한다.
 
 ```elixir
 def deps do
@@ -118,10 +119,10 @@ def deps do
 end
 ```
 
-## Provenance
+## 출처
 
-The OpenAI Codex OAuth flow (endpoints, non-standard query parameters,
-JWT claim shape, callback UX) was reverse-engineered and documented by
-pi-mono's authors. This library follows the same shape so that
-credentials produced by either tool are interchangeable (given the
-`expires_at` format helper in `Credentials.from_map/1`).
+OpenAI Codex OAuth 플로우(엔드포인트, 비표준 쿼리 파라미터, JWT 클레임
+구조, 콜백 UX)는 pi-mono 저자들이 역공학해 문서화한 경로다. 이
+라이브러리는 그 구조를 그대로 따라가므로, 양쪽에서 만든 크레덴셜은
+`Credentials.from_map/1`의 `expires_at` 변환 헬퍼를 거치면 상호
+호환된다.

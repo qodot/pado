@@ -1,58 +1,57 @@
 defmodule LLMRouter.OAuth.CallbackServer do
   @moduledoc """
-  One-shot HTTP listener for OAuth authorization callbacks.
+  OAuth 인가 콜백을 받는 일회성 HTTP 리스너.
 
-  Binds `http://127.0.0.1:1455/auth/callback` (the redirect URI registered
-  for the shared public OAuth clients used by `LLMRouter.OAuth.OpenAICodex`
-  and peers) and forwards the received authorization code back to the
-  calling process as a message.
+  `LLMRouter.OAuth.OpenAICodex` 등이 사용하는 공용 public OAuth
+  클라이언트의 redirect URI로 등록된 `http://127.0.0.1:1455/auth/callback`
+  에 바인딩하고, 수신한 인가 코드를 호출자 프로세스에 메시지로 전달한다.
 
-  Mirrors pi-ai's `startLocalOAuthServer` (utils/oauth/openai-codex.ts).
-  The server exists for exactly one login flow: once a code is received
-  (or a validation error triggers), the caller is expected to invoke
-  `stop/1` to tear everything down.
+  pi-ai의 `startLocalOAuthServer`(utils/oauth/openai-codex.ts)와 같은
+  역할을 한다. 서버는 정확히 한 번의 로그인 플로우 동안만 살아 있다.
+  코드를 수신(또는 검증 실패로 오류를 전달)하면 호출자는 `stop/1`로
+  모든 것을 정리해야 한다.
 
-  ## Optional dependencies
+  ## 선택 의존성
 
-  `:bandit` and `:plug` are declared as **optional** dependencies of
-  `:llm_router`. They are only required when a login flow is actually
-  initiated (either through `mix llm_router.login` or by calling
-  `c:LLMRouter.OAuth.Provider.login/2`). Consumers that already hold
-  credentials (e.g. a server app reading from Vault) do not need them.
+  `:bandit`과 `:plug`는 `:llm_router`의 **선택** 의존성이다. 로그인
+  플로우를 실제로 시작할 때(즉 `mix llm_router.login` 또는
+  `c:LLMRouter.OAuth.Provider.login/2` 호출 시)에만 필요하다. 이미
+  크레덴셜을 가지고 있는 소비자(예: Vault에서 읽는 서버 앱)는 설치할
+  필요가 없다.
 
-  If the deps are missing, `start/2` raises a descriptive error with
-  instructions for how to add them.
+  의존성이 없는 상태에서 `start/2`를 호출하면 추가 안내가 담긴 에러를
+  raise 한다.
 
-  ## Usage
+  ## 사용
 
       state = LLMRouter.OAuth.PKCE.state()
       {:ok, server} = LLMRouter.OAuth.CallbackServer.start(state)
-      # … direct the user's browser at the authorize URL …
+      # ... 사용자 브라우저를 authorize URL로 유도 ...
       case LLMRouter.OAuth.CallbackServer.await_code(server, timeout: 120_000) do
-        {:ok, code} -> # exchange code
-        {:error, :timeout} -> # user did not complete
-        {:error, reason} -> # state mismatch, missing code, …
+        {:ok, code} -> # 코드 교환
+        {:error, :timeout} -> # 사용자가 완료하지 않음
+        {:error, reason} -> # state 불일치, 코드 누락 등
       end
       LLMRouter.OAuth.CallbackServer.stop(server)
 
-  ## Messages
+  ## 메시지
 
-  While alive, the server sends exactly one message to the calling
-  process:
+  서버가 살아 있는 동안 호출자 프로세스에 정확히 한 번 메시지를 보낸다.
 
-      {ref, {:ok, code}}            # happy path
+      {ref, {:ok, code}}                # 정상
       {ref, {:error, :state_mismatch}}
       {ref, {:error, :missing_code}}
 
-  `await_code/2` encapsulates this receive; direct inspection is only
-  needed for advanced use cases (e.g. racing with a manual-paste prompt).
+  `await_code/2`가 이 receive를 감싸주므로 일반적으로는 직접 메시지를
+  볼 필요가 없다. 수동 붙여넣기 프롬프트와 경쟁시키는 것 같은 고급
+  시나리오에서만 이 구조가 노출된다.
   """
 
   @default_port 1455
   @default_host {127, 0, 0, 1}
   @default_timeout 300_000
 
-  @typedoc "Opaque handle returned by `start/2`."
+  @typedoc "`start/2`가 돌려주는 불투명 핸들."
   @type handle :: %{
           pid: pid,
           ref: reference,
@@ -60,14 +59,14 @@ defmodule LLMRouter.OAuth.CallbackServer do
         }
 
   @doc """
-  Starts the listener and returns a handle.
+  리스너를 시작하고 핸들을 반환한다.
 
-  Options:
+  옵션:
 
-    * `:port` — TCP port to bind (default `1455`; overriding this will
-      break real OAuth flows since the provider's redirect URI is
-      registered against 1455 — reserved for tests).
-    * `:host` — IP tuple to bind (default `{127, 0, 0, 1}`).
+    * `:port` — 바인딩할 TCP 포트(기본 `1455`). 프로바이더의 redirect
+      URI가 1455로 등록되어 있으므로 이 값을 바꾸면 실제 OAuth 플로우가
+      동작하지 않는다. 테스트 전용.
+    * `:host` — 바인딩할 IP 튜플(기본 `{127, 0, 0, 1}`).
   """
   @spec start(String.t(), keyword) :: {:ok, handle} | {:error, term}
   def start(expected_state, opts \\ []) when is_binary(expected_state) do
@@ -98,12 +97,12 @@ defmodule LLMRouter.OAuth.CallbackServer do
   end
 
   @doc """
-  Blocks until the callback handler sends a result, or the timeout
-  elapses.
+  콜백 핸들러가 결과를 보낼 때까지 블로킹한다. 타임아웃이 지나면
+  `{:error, :timeout}`을 반환한다.
 
-  Options:
+  옵션:
 
-    * `:timeout` — milliseconds (default `300_000`, i.e. 5 minutes).
+    * `:timeout` — 밀리초(기본 `300_000`, 즉 5분).
   """
   @spec await_code(handle, keyword) ::
           {:ok, String.t()} | {:error, :timeout | :state_mismatch | :missing_code | term}
@@ -118,7 +117,7 @@ defmodule LLMRouter.OAuth.CallbackServer do
   end
 
   @doc """
-  Shuts down the listener. Safe to call multiple times.
+  리스너를 종료한다. 여러 번 호출해도 안전하다.
   """
   @spec stop(handle) :: :ok
   def stop(%{pid: pid}) do
@@ -136,15 +135,15 @@ defmodule LLMRouter.OAuth.CallbackServer do
     end
   end
 
-  # --- private ---
+  # --- 내부 구현 ---
 
   defp ensure_deps! do
     cond do
       not Code.ensure_loaded?(Bandit) ->
         raise """
-        LLMRouter.OAuth.CallbackServer requires :bandit.
+        LLMRouter.OAuth.CallbackServer를 쓰려면 :bandit이 필요합니다.
 
-        Add to your mix.exs:
+        mix.exs에 다음을 추가하세요.
 
             {:bandit, "~> 1.5"},
             {:plug, "~> 1.16"}
@@ -152,18 +151,19 @@ defmodule LLMRouter.OAuth.CallbackServer do
 
       not Code.ensure_loaded?(Plug) ->
         raise """
-        LLMRouter.OAuth.CallbackServer requires :plug.
+        LLMRouter.OAuth.CallbackServer를 쓰려면 :plug이 필요합니다.
 
-        Add to your mix.exs:
+        mix.exs에 다음을 추가하세요.
 
             {:plug, "~> 1.16"}
         """
 
       not Code.ensure_loaded?(LLMRouter.OAuth.CallbackServer.Plug) ->
-        # Defensive: the plug module only compiles when :plug is available.
+        # 방어적 체크: 하위 Plug 모듈은 :plug이 있을 때만 컴파일된다.
         raise """
-        LLMRouter.OAuth.CallbackServer.Plug was not compiled. This usually
-        means :plug was missing at compile time. Re-fetch deps and recompile.
+        LLMRouter.OAuth.CallbackServer.Plug가 컴파일되지 않았습니다.
+        컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
+        받고 재컴파일하세요.
         """
 
       true ->
@@ -172,9 +172,9 @@ defmodule LLMRouter.OAuth.CallbackServer do
   end
 end
 
-# The Plug implementation only compiles when :plug is available, so the
-# library is still usable (for non-login operations such as refresh) even
-# when consumers omit the optional deps.
+# 하위 Plug 구현은 `:plug`이 있을 때만 컴파일된다. 이렇게 해야
+# `:plug`/`:bandit`을 설치하지 않은 소비자도 라이브러리의 비-로그인
+# 기능(refresh 등)을 그대로 사용할 수 있다.
 if Code.ensure_loaded?(Plug) do
   defmodule LLMRouter.OAuth.CallbackServer.Plug do
     @moduledoc false
@@ -202,14 +202,14 @@ if Code.ensure_loaded?(Plug) do
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, OAuthPage.error_html("State mismatch."))
+          |> send_resp(400, OAuthPage.error_html("state 값이 일치하지 않습니다."))
 
         is_nil(code) or code == "" ->
           send(parent, {ref, {:error, :missing_code}})
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, OAuthPage.error_html("Missing authorization code."))
+          |> send_resp(400, OAuthPage.error_html("인가 코드가 전달되지 않았습니다."))
 
         true ->
           send(parent, {ref, {:ok, code}})
@@ -223,7 +223,7 @@ if Code.ensure_loaded?(Plug) do
     def call(conn, _opts) do
       conn
       |> put_resp_content_type("text/html; charset=utf-8")
-      |> send_resp(404, OAuthPage.error_html("Callback route not found."))
+      |> send_resp(404, OAuthPage.error_html("콜백 경로를 찾을 수 없습니다."))
     end
   end
 end

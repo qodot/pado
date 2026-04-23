@@ -1,18 +1,18 @@
 defmodule LLMRouter do
   @moduledoc """
-  LLMRouter — a unified Elixir SDK for LLM provider APIs and OAuth flows.
+  LLM 프로바이더 API와 OAuth 플로우를 묶어 다루는 Elixir SDK.
 
-  Inspired by `@mariozechner/pi-ai` (TypeScript) and `req_llm` (Elixir).
+  `@mariozechner/pi-ai`(TypeScript)와 `req_llm`(Elixir)에서 영감을 받았다.
 
-  This top-level module currently exposes no public API — the library is
-  organized by subsystem:
+  최상위 모듈 자체에는 공개 API가 없다. 라이브러리는 하위 시스템별로
+  나뉘어 있다.
 
-    * `LLMRouter.OAuth.Provider` — behaviour for OAuth-based providers.
-    * `LLMRouter.OAuth.OpenAICodex` — ChatGPT Plus/Pro (Codex) login.
-    * `LLMRouter.OAuth.Credentials` — credential struct + JSON helpers.
-    * `LLMRouter.OAuth.CallbackServer` — one-shot HTTP listener (optional).
-    * `Mix.Tasks.LLMRouter.Login` — reference CLI (`mix llm_router.login`).
+    * `LLMRouter.OAuth.Provider` — OAuth 기반 프로바이더의 behaviour.
+    * `LLMRouter.OAuth.OpenAICodex` — ChatGPT Plus/Pro(Codex) 로그인.
+    * `LLMRouter.OAuth.Credentials` — 크레덴셜 구조체와 JSON 헬퍼.
+    * `LLMRouter.OAuth.CallbackServer` — 일회성 HTTP 리스너(선택 의존성).
+    * `Mix.Tasks.LlmRouter.Login` — 레퍼런스 CLI(`mix llm_router.login`).
 
-  Streaming/completion APIs will be added in subsequent milestones.
+  스트리밍·completion API는 이후 마일스톤에서 추가한다.
   """
 end

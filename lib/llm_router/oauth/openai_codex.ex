@@ -1,33 +1,33 @@
 defmodule LLMRouter.OAuth.OpenAICodex do
   @moduledoc """
-  OAuth login against OpenAI's Codex ("simplified") flow, which accepts
-  ChatGPT Plus/Pro subscription credentials and returns tokens usable
-  against `https://chatgpt.com/backend-api/codex/responses`.
+  OpenAI Codex("simplified") 플로우로 로그인한다. ChatGPT Plus/Pro
+  구독 자격으로 인증해 `https://chatgpt.com/backend-api/codex/responses`
+  엔드포인트에 쓸 토큰을 발급받는 경로다.
 
-  Implements `LLMRouter.OAuth.Provider`. Structurally follows pi-ai's
-  `utils/oauth/openai-codex.ts` almost line-for-line.
+  `LLMRouter.OAuth.Provider`를 구현한다. 구조는 pi-ai의
+  `utils/oauth/openai-codex.ts`를 거의 그대로 옮긴 것이다.
 
-  ## Shared public client
+  ## 공용 public 클라이언트
 
-  The `client_id` and registered `redirect_uri` (`localhost:1455`) are
-  public properties of the Codex CLI OAuth app and are used by pi-ai,
-  by this library, and by other community tools. There is currently no
-  mechanism to register an independent `client_id` for this flow.
+  `client_id`와 등록된 `redirect_uri`(`localhost:1455`)는 Codex CLI
+  OAuth 앱의 공개된 값이며 pi-ai, 이 라이브러리, 다른 커뮤니티 도구가
+  함께 쓴다. 현재로서는 이 플로우용으로 독립 `client_id`를 등록할 공식
+  경로가 없다.
 
-  Because the redirect URI is server-registered and cannot be changed
-  from the client side, **the browser must be opened on the machine that
-  initiates `login/2`** — there is no way to route the callback to a
-  remote server. Consumers that need server-side OAuth should instead
-  use `refresh/1` with pre-obtained credentials (see README).
+  redirect URI가 서버에 등록되어 있어 클라이언트 측에서 바꿀 수 없다.
+  즉 **`login/2`를 시작하는 머신에서 브라우저를 열어야 한다.** 콜백을
+  원격 서버로 우회시킬 수 없다. 서버 사이드 OAuth가 필요하다면 사전에
+  얻어둔 크레덴셜로 `refresh/1`만 호출하는 방식으로 운영한다
+  (README 참고).
 
   ## Originator
 
-  The `originator` authorize parameter is a short identifier that the
-  server logs and may use to differentiate clients. Pi uses `"pi"`.
-  This module defaults to `"pi"` because it is the only value known to
-  be accepted by the upstream server; this is a conservative default.
-  Pass `originator: "llm-router"` in `login/2` opts to experiment with
-  your own identifier.
+  authorize URL의 `originator` 파라미터는 서버가 로그로 남기거나
+  클라이언트 구분에 쓸 수 있는 짧은 식별자다. Pi는 `"pi"`를 쓴다.
+  이 모듈도 기본값을 `"pi"`로 둔다. 업스트림 서버가 실제로 허용하는
+  값 중 확인된 것이 `"pi"`뿐이기 때문이다(보수적 기본값). 다른 값으로
+  실험하려면 `login/2`에 `originator: "llm-router"` 같은 옵션을
+  넘긴다.
   """
 
   @behaviour LLMRouter.OAuth.Provider
@@ -36,7 +36,7 @@ defmodule LLMRouter.OAuth.OpenAICodex do
 
   require Logger
 
-  # --- OAuth constants (must match the registered client) ---
+  # --- OAuth 상수(등록된 클라이언트와 일치해야 한다) ---
 
   @client_id "app_EMoamEEZ73f0CkXaXp7hrann"
   @authorize_url "https://auth.openai.com/oauth/authorize"
@@ -47,7 +47,7 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   @default_originator "pi"
   @default_timeout 300_000
 
-  # --- Provider callbacks ---
+  # --- Provider 콜백 구현 ---
 
   @impl true
   def id, do: :openai_codex
@@ -98,9 +98,9 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   @impl true
   def api_key(%Credentials{access: access}), do: access
 
-  # --- Public helpers (also used in tests and other providers' flows) ---
+  # --- 공개 헬퍼(테스트와 다른 프로바이더 구현에서도 사용) ---
 
-  @doc "Extracts `chatgpt_account_id` from a Codex access-token JWT."
+  @doc "Codex access 토큰(JWT)에서 `chatgpt_account_id`를 추출한다."
   @spec parse_account_id(String.t()) :: {:ok, String.t()} | {:error, term}
   def parse_account_id(access_token) when is_binary(access_token) do
     with [_h, payload_b64, _s] <- String.split(access_token, "."),
@@ -116,10 +116,11 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   end
 
   @doc """
-  Parses free-form user input (authorization code, `code=…&state=…`
-  querystring, or full redirect URL) into `%{code: code, state: state}`.
+  사용자가 수동으로 입력한 값을 파싱해 `%{code: code, state: state}`를
+  돌려준다. 인가 코드만 붙여넣는 경우, `code=…&state=…` 형태의
+  쿼리스트링, 리다이렉트 URL 전체 모두를 받아들인다.
 
-  Mirrors pi-ai's `parseAuthorizationInput`.
+  pi-ai의 `parseAuthorizationInput`과 대응된다.
   """
   @spec parse_authorization_input(String.t()) ::
           %{optional(:code) => String.t(), optional(:state) => String.t()}
@@ -145,24 +146,20 @@ defmodule LLMRouter.OAuth.OpenAICodex do
     end
   end
 
-  # --- internal: flow orchestration ---
+  # --- 내부 구현: 플로우 조합 ---
 
   defp collect_code(url, state, callbacks, timeout, opts) do
     case start_callback_server(state, opts) do
       {:ok, server} ->
         try do
-          notify_on_auth(
-            callbacks,
-            url,
-            "A browser window should open. Complete login to finish."
-          )
+          notify_on_auth(callbacks, url, "브라우저 창이 열립니다. 로그인을 완료해주세요.")
 
           case CallbackServer.await_code(server, timeout: timeout) do
             {:ok, _code} = ok ->
               ok
 
             {:error, reason} = err ->
-              Logger.debug("[openai-codex] callback error: #{inspect(reason)}, trying prompt")
+              Logger.debug("[openai-codex] 콜백 오류: #{inspect(reason)}, 프롬프트 폴백 시도")
               prompt_fallback(callbacks, state) || err
           end
         after
@@ -170,15 +167,12 @@ defmodule LLMRouter.OAuth.OpenAICodex do
         end
 
       {:error, reason} ->
-        Logger.warning(
-          "[openai-codex] failed to bind callback server (#{inspect(reason)}); " <>
-            "falling back to manual paste."
-        )
+        Logger.warning("[openai-codex] 콜백 서버 바인딩 실패(#{inspect(reason)}). 수동 붙여넣기 모드로 전환합니다.")
 
         notify_on_auth(
           callbacks,
           url,
-          "Complete login in your browser, then paste the redirect URL."
+          "브라우저에서 로그인을 완료한 뒤 리다이렉트된 URL을 붙여 넣어주세요."
         )
 
         case prompt_fallback(callbacks, state) do
@@ -190,8 +184,8 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   end
 
   defp start_callback_server(state, opts) do
-    # Tests may pass :port/:host; production should leave these at the
-    # protocol-registered defaults.
+    # 테스트에서는 :port/:host를 덮어쓸 수 있게 한다. 운영에서는 프로토콜이
+    # 요구하는 기본값을 그대로 둬야 한다.
     server_opts =
       opts
       |> Keyword.take([:port, :host])
@@ -213,7 +207,7 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   defp prompt_fallback(%{on_prompt: on_prompt} = _callbacks, expected_state)
        when is_function(on_prompt, 1) do
     case on_prompt.(%{
-           message: "Paste the authorization code (or full redirect URL):",
+           message: "인가 코드(또는 리다이렉트된 URL 전체)를 붙여넣어 주세요:",
            allow_empty: false
          }) do
       {:ok, raw} ->
@@ -237,7 +231,7 @@ defmodule LLMRouter.OAuth.OpenAICodex do
 
   defp prompt_fallback(_callbacks, _state), do: nil
 
-  # --- internal: HTTP ---
+  # --- 내부 구현: HTTP ---
 
   defp build_authorize_url(challenge, state, originator) do
     query =
@@ -304,7 +298,7 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   defp validate_token_response(body),
     do: {:error, {:invalid_token_response, body}}
 
-  # --- internal: input parsing helpers ---
+  # --- 내부 구현: 입력 파싱 헬퍼 ---
 
   defp parse_full_url(value) do
     case URI.new(value) do
@@ -336,7 +330,8 @@ defmodule LLMRouter.OAuth.OpenAICodex do
   defp maybe_put(map, _key, ""), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  # base64url sometimes comes unpadded; pad it before Base.url_decode64.
+  # base64url 입력은 패딩이 없이 올 수 있다. Base.url_decode64 호출 전에
+  # 길이를 4의 배수로 맞춰준다.
   defp pad_base64(s) do
     case rem(byte_size(s), 4) do
       0 -> s

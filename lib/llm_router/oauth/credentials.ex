@@ -1,18 +1,17 @@
 defmodule LLMRouter.OAuth.Credentials do
   @moduledoc """
-  Value object for an OAuth credential set.
+  OAuth 크레덴셜 값 객체.
 
-  This module is intentionally pure data + small helpers. The library does
-  not own any storage: callers persist credentials wherever they like
-  (file, Vault, secrets manager, DB). JSON serialization via `to_map/1`
-  and `from_map/1` is provided for convenience.
+  이 모듈은 의도적으로 순수한 데이터와 작은 헬퍼만 담는다. 라이브러리
+  자체는 어떤 저장소도 소유하지 않는다. 호출자가 원하는 곳(파일, Vault,
+  시크릿 매니저, DB 등)에 저장한다. 편의를 위해 `to_map/1`과 `from_map/1`
+  을 통한 JSON 직렬화를 제공한다.
 
-  The struct mirrors pi-ai's `OAuthCredentials` shape but uses Elixir
-  conventions:
+  구조체는 pi-ai의 `OAuthCredentials`와 같은 역할이지만 Elixir 관습을 따른다.
 
-    * `:expires_at` is a `DateTime` (Pi uses milliseconds since epoch).
-    * Provider-specific fields (e.g. OpenAI's `account_id`) go in `:extra`
-      so the core struct stays stable across providers.
+    * `:expires_at`은 `DateTime`이다(Pi는 epoch 밀리초).
+    * 프로바이더별 부가 필드(예: OpenAI의 `account_id`)는 `:extra`에 둔다.
+      이렇게 하면 프로바이더가 늘어나도 핵심 구조체는 안정적이다.
   """
 
   @type t :: %__MODULE__{
@@ -28,9 +27,9 @@ defmodule LLMRouter.OAuth.Credentials do
   defstruct [:provider, :access, :refresh, :expires_at, extra: %{}]
 
   @doc """
-  Returns `true` when the access token is at or past its expiration time.
+  access 토큰이 만료 시각에 도달했거나 지났는지 확인한다.
 
-  Callers typically refresh a bit before actual expiry; see `stale?/2`.
+  실제 만료 직전에 선제적으로 갱신하고 싶다면 `stale?/2`를 쓴다.
   """
   @spec expired?(t) :: boolean
   def expired?(%__MODULE__{expires_at: at}) do
@@ -38,9 +37,9 @@ defmodule LLMRouter.OAuth.Credentials do
   end
 
   @doc """
-  Returns `true` when the credentials will expire within `skew_seconds`.
+  `skew_seconds` 안에 만료될 예정이면 `true`를 반환한다.
 
-  Useful for proactive refresh (recommended: 60-300 seconds).
+  선제적 갱신에 쓰인다(권장 범위: 60~300초).
   """
   @spec stale?(t, non_neg_integer) :: boolean
   def stale?(%__MODULE__{expires_at: at}, skew_seconds) when skew_seconds >= 0 do
@@ -49,8 +48,8 @@ defmodule LLMRouter.OAuth.Credentials do
   end
 
   @doc """
-  Builds credentials from an `expires_in` duration (seconds from now), as
-  returned by a token endpoint.
+  토큰 엔드포인트가 반환하는 `expires_in`(지금부터의 초)을 기준으로
+  크레덴셜을 조립한다.
   """
   @spec build(atom, String.t(), String.t(), non_neg_integer, map) :: t
   def build(provider, access, refresh, expires_in_seconds, extra \\ %{})
@@ -66,8 +65,8 @@ defmodule LLMRouter.OAuth.Credentials do
   end
 
   @doc """
-  Serializes to a JSON-compatible map. `:expires_at` becomes an ISO8601
-  string; `:provider` becomes a string for cross-language portability.
+  JSON 호환 맵으로 직렬화한다. `:expires_at`은 ISO8601 문자열,
+  `:provider`는 문자열로 변환해 다른 언어와의 호환을 보장한다.
   """
   @spec to_map(t) :: map
   def to_map(%__MODULE__{} = c) do
@@ -81,11 +80,11 @@ defmodule LLMRouter.OAuth.Credentials do
   end
 
   @doc """
-  Parses a map (typically from `Jason.decode!/1`) into a `t/0`.
+  맵(보통 `Jason.decode!/1`의 결과)을 `t/0`로 파싱한다.
 
-  Accepts either string or atom keys, and both ISO8601 strings and
-  millisecond integers for `expires_at` (millisecond form matches Pi's
-  on-disk format, which eases migration).
+  키는 문자열과 아톰 모두 허용하고, `expires_at`은 ISO8601 문자열과
+  epoch 밀리초 정수를 모두 받는다. 밀리초 형식은 Pi의 디스크 포맷과
+  동일해 마이그레이션에 유리하다.
   """
   @spec from_map(map) :: {:ok, t} | {:error, term}
   def from_map(map) when is_map(map) do
@@ -113,7 +112,7 @@ defmodule LLMRouter.OAuth.Credentials do
 
   def from_map(_), do: {:error, :invalid_map}
 
-  # --- private ---
+  # --- 내부 구현 ---
 
   defp fetch(map, key) do
     case map do

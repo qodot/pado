@@ -1,35 +1,35 @@
 defmodule LLMRouter.OAuth.OAuthPage do
   @moduledoc """
-  Minimal HTML templates for the OAuth callback landing page.
+  OAuth 콜백 랜딩 페이지를 위한 최소 HTML 템플릿.
 
-  Mirrors pi-ai's `utils/oauth/oauth-page.ts`. Rendered in the user's
-  browser after the provider redirects back to `localhost:1455`.
-  Kept intentionally self-contained (no CSS/JS dependencies).
+  pi-ai의 `utils/oauth/oauth-page.ts`와 대응된다. 프로바이더가
+  `localhost:1455`로 리다이렉트시킨 뒤 사용자 브라우저에 표시된다.
+  외부 CSS/JS 의존성이 없도록 의도적으로 자기완결 형태로 유지한다.
   """
 
-  @doc "Success page shown when the callback was processed correctly."
+  @doc "콜백이 정상 처리되었을 때 표시되는 성공 페이지."
   @spec success_html(String.t()) :: String.t()
-  def success_html(message \\ "Authentication completed. You can close this window.") do
+  def success_html(message \\ "인증이 완료되었습니다. 이 창을 닫아도 됩니다.") do
     render(%{
-      title: "Authentication successful",
-      heading: "Authentication successful",
+      title: "인증 성공",
+      heading: "인증 성공",
       message: message,
       details: nil
     })
   end
 
-  @doc "Error page shown when the callback is rejected."
+  @doc "콜백이 거절되었을 때 표시되는 오류 페이지."
   @spec error_html(String.t(), String.t() | nil) :: String.t()
   def error_html(message, details \\ nil) do
     render(%{
-      title: "Authentication failed",
-      heading: "Authentication failed",
+      title: "인증 실패",
+      heading: "인증 실패",
       message: message,
       details: details
     })
   end
 
-  # --- private ---
+  # --- 내부 구현 ---
 
   defp render(%{title: title, heading: heading, message: message, details: details}) do
     details_block =
@@ -40,7 +40,7 @@ defmodule LLMRouter.OAuth.OAuthPage do
 
     """
     <!doctype html>
-    <html lang="en">
+    <html lang="ko">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -84,7 +84,7 @@ defmodule LLMRouter.OAuth.OAuthPage do
     """
   end
 
-  # Minimal HTML escape; the inputs we receive are short, known strings.
+  # 입력은 짧고 알려진 문자열이라고 가정하고 간단한 HTML 이스케이프만 수행한다.
   defp escape(value) when is_binary(value) do
     value
     |> String.replace("&", "&amp;")

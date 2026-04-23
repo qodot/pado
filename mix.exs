@@ -23,16 +23,16 @@ defmodule LLMRouter.MixProject do
 
   defp deps do
     [
-      # Core
+      # 핵심 의존성
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
 
-      # OAuth callback server (optional — only required when calling
-      # LLMRouter.OAuth.*.login/2 or using `mix llm_router.login`).
+      # OAuth 콜백 서버(선택 의존성) — `LLMRouter.OAuth.*.login/2` 또는
+      # `mix llm_router.login`을 실제로 실행할 때만 필요하다.
       {:bandit, "~> 1.5", optional: true},
       {:plug, "~> 1.16", optional: true},
 
-      # Dev/test
+      # 개발/테스트
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
