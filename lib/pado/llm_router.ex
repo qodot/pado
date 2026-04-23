@@ -10,7 +10,7 @@ defmodule Pado.LLMRouter do
     * `Pado.LLMRouter.OAuth.Provider` — OAuth 기반 프로바이더의 behaviour.
     * `Pado.LLMRouter.OAuth.OpenAICodex` — ChatGPT Plus/Pro(Codex) 로그인.
     * `Pado.LLMRouter.OAuth.Credentials` — 크레덴셜 구조체와 JSON 헬퍼.
-    * `Pado.LLMRouter.OAuth.CallbackServer` — 일회성 HTTP 리스너(선택 의존성).
+    * `Pado.LLMRouter.OAuth.Callback.Server` — 일회성 HTTP 리스너(선택 의존성).
     * `Mix.Tasks.Pado.LlmRouter.Login` — 레퍼런스 CLI(`mix llm_router.login`).
 
   스트리밍·completion API는 이후 마일스톤에서 추가한다.

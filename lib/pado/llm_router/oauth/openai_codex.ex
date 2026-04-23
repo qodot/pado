@@ -32,7 +32,7 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
 
   @behaviour Pado.LLMRouter.OAuth.Provider
 
-  alias Pado.LLMRouter.OAuth.{CallbackServer, Credentials, PKCE}
+  alias Pado.LLMRouter.OAuth.{Callback, Credentials, PKCE}
 
   require Logger
 
@@ -154,7 +154,7 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
         try do
           notify_on_auth(callbacks, url, "브라우저 창이 열립니다. 로그인을 완료해주세요.")
 
-          case CallbackServer.await_code(server, timeout: timeout) do
+          case Callback.Server.await_code(server, timeout: timeout) do
             {:ok, _code} = ok ->
               ok
 
@@ -163,7 +163,7 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
               prompt_fallback(callbacks, state) || err
           end
         after
-          CallbackServer.stop(server)
+          Callback.Server.stop(server)
         end
 
       {:error, reason} ->
@@ -191,7 +191,7 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
       |> Keyword.take([:port, :host])
 
     try do
-      CallbackServer.start(state, server_opts)
+      Callback.Server.start(state, server_opts)
     rescue
       e -> {:error, Exception.message(e)}
     end

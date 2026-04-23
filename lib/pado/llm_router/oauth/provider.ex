@@ -20,7 +20,7 @@ defmodule Pado.LLMRouter.OAuth.Provider do
     `c:login/2`는 `Pado.LLMRouter.OAuth.Credentials.t/0`만 돌려준다.
   * `localhost` redirect URI를 쓰는 프로바이더
     (`uses_callback_server?/0 == true`)는 내부에서 단명 HTTP 리스너를
-    띄우도록 기대된다. `Pado.LLMRouter.OAuth.CallbackServer`를 쓰는 것이
+    띄우도록 기대된다. `Pado.LLMRouter.OAuth.Callback.Server`를 쓰는 것이
     표준 경로다. 이는 정책 선택이 아니라 OAuth 프로토콜 자체의 제약이다.
   """
 

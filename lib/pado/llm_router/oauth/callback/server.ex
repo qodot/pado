@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.OAuth.CallbackServer do
+defmodule Pado.LLMRouter.OAuth.Callback.Server do
   @moduledoc """
   OAuth 인가 콜백을 받는 일회성 HTTP 리스너.
 
@@ -25,14 +25,14 @@ defmodule Pado.LLMRouter.OAuth.CallbackServer do
   ## 사용
 
       state = Pado.LLMRouter.OAuth.PKCE.state()
-      {:ok, server} = Pado.LLMRouter.OAuth.CallbackServer.start(state)
+      {:ok, server} = Pado.LLMRouter.OAuth.Callback.Server.start(state)
       # ... 사용자 브라우저를 authorize URL로 유도 ...
-      case Pado.LLMRouter.OAuth.CallbackServer.await_code(server, timeout: 120_000) do
+      case Pado.LLMRouter.OAuth.Callback.Server.await_code(server, timeout: 120_000) do
         {:ok, code} -> # 코드 교환
         {:error, :timeout} -> # 사용자가 완료하지 않음
         {:error, reason} -> # state 불일치, 코드 누락 등
       end
-      Pado.LLMRouter.OAuth.CallbackServer.stop(server)
+      Pado.LLMRouter.OAuth.Callback.Server.stop(server)
 
   ## 메시지
 
@@ -81,7 +81,7 @@ defmodule Pado.LLMRouter.OAuth.CallbackServer do
     plug_opts = %{parent: parent, ref: ref, expected_state: expected_state}
 
     bandit_opts = [
-      plug: {Pado.LLMRouter.OAuth.CallbackServer.Plug, plug_opts},
+      plug: {Pado.LLMRouter.OAuth.Callback.Server.Plug, plug_opts},
       port: port,
       ip: host,
       startup_log: false
@@ -141,7 +141,7 @@ defmodule Pado.LLMRouter.OAuth.CallbackServer do
     cond do
       not Code.ensure_loaded?(Bandit) ->
         raise """
-        Pado.LLMRouter.OAuth.CallbackServer를 쓰려면 :bandit이 필요합니다.
+        Pado.LLMRouter.OAuth.Callback.Server를 쓰려면 :bandit이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
@@ -151,17 +151,17 @@ defmodule Pado.LLMRouter.OAuth.CallbackServer do
 
       not Code.ensure_loaded?(Plug) ->
         raise """
-        Pado.LLMRouter.OAuth.CallbackServer를 쓰려면 :plug이 필요합니다.
+        Pado.LLMRouter.OAuth.Callback.Server를 쓰려면 :plug이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
             {:plug, "~> 1.16"}
         """
 
-      not Code.ensure_loaded?(Pado.LLMRouter.OAuth.CallbackServer.Plug) ->
+      not Code.ensure_loaded?(Pado.LLMRouter.OAuth.Callback.Server.Plug) ->
         # 방어적 체크: 하위 Plug 모듈은 :plug이 있을 때만 컴파일된다.
         raise """
-        Pado.LLMRouter.OAuth.CallbackServer.Plug가 컴파일되지 않았습니다.
+        Pado.LLMRouter.OAuth.Callback.Server.Plug가 컴파일되지 않았습니다.
         컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
         받고 재컴파일하세요.
         """
@@ -176,12 +176,12 @@ end
 # `:plug`/`:bandit`을 설치하지 않은 소비자도 라이브러리의 비-로그인
 # 기능(refresh 등)을 그대로 사용할 수 있다.
 if Code.ensure_loaded?(Plug) do
-  defmodule Pado.LLMRouter.OAuth.CallbackServer.Plug do
+  defmodule Pado.LLMRouter.OAuth.Callback.Server.Plug do
     @moduledoc false
     @behaviour Plug
 
     import Plug.Conn
-    alias Pado.LLMRouter.OAuth.OAuthPage
+    alias Pado.LLMRouter.OAuth.Callback.Page
 
     @impl Plug
     def init(opts), do: opts
@@ -202,28 +202,28 @@ if Code.ensure_loaded?(Plug) do
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, OAuthPage.error_html("state 값이 일치하지 않습니다."))
+          |> send_resp(400, Page.error_html("state 값이 일치하지 않습니다."))
 
         is_nil(code) or code == "" ->
           send(parent, {ref, {:error, :missing_code}})
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, OAuthPage.error_html("인가 코드가 전달되지 않았습니다."))
+          |> send_resp(400, Page.error_html("인가 코드가 전달되지 않았습니다."))
 
         true ->
           send(parent, {ref, {:ok, code}})
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(200, OAuthPage.success_html())
+          |> send_resp(200, Page.success_html())
       end
     end
 
     def call(conn, _opts) do
       conn
       |> put_resp_content_type("text/html; charset=utf-8")
-      |> send_resp(404, OAuthPage.error_html("콜백 경로를 찾을 수 없습니다."))
+      |> send_resp(404, Page.error_html("콜백 경로를 찾을 수 없습니다."))
     end
   end
 end

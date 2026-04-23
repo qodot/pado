@@ -94,7 +94,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 | `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
 | `Pado.LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
 | `Pado.LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) 로그인·갱신 |
-| `Pado.LLMRouter.OAuth.CallbackServer` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
+| `Pado.LLMRouter.OAuth.Callback.Server` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
 | `Mix.Tasks.Pado.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
 
 ### 설계 메모
