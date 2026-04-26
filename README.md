@@ -187,6 +187,9 @@ Enum.each(stream, fn
   {:error, %{error_message: message}} -> IO.puts(:stderr, "오류: #{message}")
   _ -> :ok
 end)
+
+# 일부 이벤트만 읽고 중단해야 하면 명시적으로 취소할 수 있다.
+# stream.cancel.()
 ```
 
 > 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).

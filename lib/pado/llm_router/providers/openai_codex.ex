@@ -1,8 +1,8 @@
 defmodule Pado.LLMRouter.Providers.OpenAICodex do
   @behaviour Pado.LLMRouter.Provider
 
-  alias Pado.LLMRouter.{Context, Model, Usage}
-  alias Pado.LLMRouter.Message.Assistant
+  alias Pado.LLMRouter.{Context, Model}
+  alias Pado.LLMRouter.Stream, as: RouterStream
   alias Pado.LLMRouter.OAuth.Credentials
   alias Pado.LLMRouter.Providers.OpenAICodex.{EventMapper, Request, SSE}
 
@@ -56,62 +56,61 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
     request = Finch.build(:post, url, headers, body)
     ref = Finch.async_request(request, @finch_pool)
 
-    case await_status(ref, receive_timeout) do
-      {:ok, 200} ->
-        ref
-        |> data_stream(receive_timeout)
-        |> SSE.stream()
-        |> EventMapper.map_stream(model)
+    events =
+      ref
+      |> data_stream(receive_timeout)
+      |> SSE.stream()
+      |> EventMapper.map_stream(model)
 
-      {:ok, status} ->
-        body = drain_error_body(ref, receive_timeout)
-        _ = Finch.cancel_async_request(ref)
-        [http_error_event(model, status, body)]
-
-      {:error, reason} ->
-        _ = Finch.cancel_async_request(ref)
-        [transport_error_event(model, reason)]
-    end
-  end
-
-  defp await_status(ref, timeout) do
-    receive do
-      {^ref, {:status, status}} -> {:ok, status}
-      {^ref, {:error, reason}} -> {:error, reason}
-    after
-      timeout -> {:error, :await_status_timeout}
-    end
+    %RouterStream{events: events, cancel: fn -> Finch.cancel_async_request(ref) end}
   end
 
   defp data_stream(ref, timeout) do
     Stream.resource(
-      fn -> %{ref: ref, timeout: timeout, halted: false} end,
-      fn
-        %{halted: true} = s ->
-          {:halt, s}
-
-        %{ref: ref, timeout: timeout} = s ->
-          receive do
-            {^ref, {:headers, _}} ->
-              {[], s}
-
-            {^ref, {:data, chunk}} ->
-              {[chunk], s}
-
-            {^ref, :done} ->
-              {:halt, %{s | halted: true}}
-
-            {^ref, {:error, reason}} ->
-              {[stream_error_chunk("Finch 스트림 오류: #{inspect(reason)}")], %{s | halted: true}}
-          after
-            timeout -> {[stream_error_chunk("Finch 스트림 시간 초과")], %{s | halted: true}}
-          end
-      end,
+      fn -> %{ref: ref, timeout: timeout, phase: :status, halted: false} end,
+      &next_chunk/1,
       fn %{ref: ref} ->
         _ = Finch.cancel_async_request(ref)
         :ok
       end
     )
+  end
+
+  defp next_chunk(%{halted: true} = s), do: {:halt, s}
+
+  defp next_chunk(%{phase: :status, ref: ref, timeout: timeout} = s) do
+    receive do
+      {^ref, {:status, 200}} ->
+        {[], %{s | phase: :data}}
+
+      {^ref, {:status, status}} ->
+        body = drain_error_body(ref, timeout)
+        {[stream_error_chunk("HTTP #{status}: #{body}")], %{s | halted: true}}
+
+      {^ref, {:error, reason}} ->
+        {[stream_error_chunk("transport error: #{inspect(reason)}")], %{s | halted: true}}
+    after
+      timeout ->
+        {[stream_error_chunk("transport error: :await_status_timeout")], %{s | halted: true}}
+    end
+  end
+
+  defp next_chunk(%{phase: :data, ref: ref, timeout: timeout} = s) do
+    receive do
+      {^ref, {:headers, _}} ->
+        {[], s}
+
+      {^ref, {:data, chunk}} ->
+        {[chunk], s}
+
+      {^ref, :done} ->
+        {:halt, %{s | halted: true}}
+
+      {^ref, {:error, reason}} ->
+        {[stream_error_chunk("Finch 스트림 오류: #{inspect(reason)}")], %{s | halted: true}}
+    after
+      timeout -> {[stream_error_chunk("Finch 스트림 시간 초과")], %{s | halted: true}}
+    end
   end
 
   defp drain_error_body(ref, timeout), do: drain_error_body(ref, timeout, [])
@@ -132,31 +131,5 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
   defp stream_error_chunk(message) do
     data = Jason.encode!(%{"type" => "error", "message" => message})
     "data: " <> data <> "\n\n"
-  end
-
-  defp http_error_event(model, status, body) do
-    msg = "HTTP #{status}: #{body}"
-    assistant = %{Assistant.init(model) | stop_reason: :error, error_message: msg}
-
-    {:error,
-     %{
-       reason: :error,
-       error_message: msg,
-       message: assistant,
-       usage: Usage.empty()
-     }}
-  end
-
-  defp transport_error_event(model, reason) do
-    msg = "transport error: #{inspect(reason)}"
-    assistant = %{Assistant.init(model) | stop_reason: :error, error_message: msg}
-
-    {:error,
-     %{
-       reason: :error,
-       error_message: msg,
-       message: assistant,
-       usage: Usage.empty()
-     }}
   end
 end

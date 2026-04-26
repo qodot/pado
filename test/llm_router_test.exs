@@ -2,7 +2,7 @@ defmodule Pado.LLMRouterTest do
   use ExUnit.Case, async: true
 
   alias Pado.LLMRouter
-  alias Pado.LLMRouter.{Catalog, Context, Model}
+  alias Pado.LLMRouter.{Catalog, Context, Model, Stream}
   alias Pado.LLMRouter.Message.User
   alias Pado.LLMRouter.OAuth.Credentials
 
@@ -17,6 +17,27 @@ defmodule Pado.LLMRouterTest do
 
     assert {:error, {:unsupported_provider, :dummy}} =
              LLMRouter.stream(model, ctx, credentials, "session-1")
+  end
+
+  test "Stream 구조체는 취소 함수를 가진다" do
+    parent = self()
+
+    stream = %Stream{
+      events: [],
+      cancel: fn ->
+        send(parent, :cancelled)
+        :ok
+      end
+    }
+
+    assert :ok == stream.cancel.()
+    assert_received :cancelled
+  end
+
+  test "Stream 구조체는 이벤트 Enumerable로 동작한다" do
+    stream = %Stream{events: [:a, :b], cancel: fn -> :ok end}
+
+    assert Enum.to_list(stream) == [:a, :b]
   end
 
   test "OpenAI Codex 어댑터는 크레덴셜을 사전 검증한다" do
