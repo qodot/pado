@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
   @moduledoc """
   LLM OAuth 프로바이더에 로그인해 크레덴셜을 JSON으로 출력한다.
 
-      $ mix pado.llm_router.login                      # 기본값: openai-codex
+      $ mix pado.llm_router.login
       $ mix pado.llm_router.login openai-codex
       $ mix pado.llm_router.login --output creds.json
 
@@ -69,8 +69,6 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
     end
   end
 
-  # --- 배선 ---
-
   defp resolve_provider([]), do: Pado.LLMRouter.OAuth.OpenAICodex
 
   defp resolve_provider([alias_name | _]) do
@@ -135,8 +133,6 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
     end
   end
 
-  # --- 출력 ---
-
   defp write_output(%Credentials{} = creds, nil) do
     creds
     |> Credentials.to_map()
@@ -152,7 +148,6 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
 
     File.write!(path, json)
 
-    # 크레덴셜은 민감 정보이므로 권한을 조인다.
     _ = File.chmod(path, 0o600)
 
     Mix.shell().info("크레덴셜을 #{path} 에 기록했습니다.")

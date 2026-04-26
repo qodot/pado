@@ -68,8 +68,6 @@ defmodule Pado.LLMRouter.Message do
   def text(%Assistant{content: parts}), do: join_text(parts)
   def text(%ToolResult{content: parts}), do: join_text(parts)
 
-  # --- 내부 헬퍼 ---
-
   defp join_text(parts) when is_list(parts) do
     parts
     |> Enum.flat_map(fn

@@ -29,8 +29,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Page do
     })
   end
 
-  # --- 내부 구현 ---
-
   defp render(%{title: title, heading: heading, message: message, details: details}) do
     details_block =
       case details do
@@ -84,7 +82,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Page do
     """
   end
 
-  # 입력은 짧고 알려진 문자열이라고 가정하고 간단한 HTML 이스케이프만 수행한다.
   defp escape(value) when is_binary(value) do
     value
     |> String.replace("&", "&amp;")

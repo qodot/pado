@@ -48,8 +48,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     Stream.transform(sse_events, init_state(model), &step/2)
   end
 
-  # --- 상태 ---
-
   defp init_state(%Model{} = model) do
     %{
       model: model,
@@ -60,8 +58,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     }
   end
 
-  # --- SSE 이벤트 → Codex JSON 디코드 ---
-
   defp step(%SSE.Event{data: ""}, state), do: {[], state}
 
   defp step(%SSE.Event{data: data}, state) do
@@ -70,8 +66,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
       {:error, _} -> {[], state}
     end
   end
-
-  # --- Codex 이벤트 핸들러 ---
 
   defp handle(%{"type" => "response.created"}, state) do
     {[{:start, %{message: state.assistant}}], state}
@@ -197,10 +191,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
      ], state}
   end
 
-  # 무시하는 이벤트 (in_progress, content_part.*, output_item.done 등)
   defp handle(_, state), do: {[], state}
-
-  # --- usage / stop reason ---
 
   defp build_usage(response, %Model{} = model) do
     u = response["usage"] || %{}

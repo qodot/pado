@@ -15,7 +15,7 @@ defmodule Pado.LLMRouter.Event do
         {:text_start,    %{index: i}}
         {:text_delta,    %{index: i, delta: "토큰"}}  *
         {:text_end,      %{index: i}}
-        | {:thinking_start, ...} / _delta / _end      # reasoning 지원 모델
+        | {:thinking_start, ...} / _delta / _end
         | {:tool_call_start, %{index, id, name}}
           {:tool_call_delta, %{index, delta: "json조각"}} *
           {:tool_call_end,   %{index}}

@@ -26,19 +26,19 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
 
       state = Pado.LLMRouter.OAuth.PKCE.state()
       {:ok, server} = Pado.LLMRouter.OAuth.Callback.Server.start(state)
-      # ... 사용자 브라우저를 authorize URL로 유도 ...
+
       case Pado.LLMRouter.OAuth.Callback.Server.await_code(server, timeout: 120_000) do
-        {:ok, code} -> # 코드 교환
-        {:error, :timeout} -> # 사용자가 완료하지 않음
-        {:error, reason} -> # state 불일치, 코드 누락 등
+        {:ok, code} -> code
+        {:error, reason} -> {:error, reason}
       end
+
       Pado.LLMRouter.OAuth.Callback.Server.stop(server)
 
   ## 메시지
 
   서버가 살아 있는 동안 호출자 프로세스에 정확히 한 번 메시지를 보낸다.
 
-      {ref, {:ok, code}}                # 정상
+      {ref, {:ok, code}}
       {ref, {:error, :state_mismatch}}
       {ref, {:error, :missing_code}}
 
@@ -135,8 +135,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
     end
   end
 
-  # --- 내부 구현 ---
-
   defp ensure_deps! do
     cond do
       not Code.ensure_loaded?(Bandit) ->
@@ -159,7 +157,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
         """
 
       not Code.ensure_loaded?(Pado.LLMRouter.OAuth.Callback.Server.Plug) ->
-        # 방어적 체크: 하위 Plug 모듈은 :plug이 있을 때만 컴파일된다.
         raise """
         Pado.LLMRouter.OAuth.Callback.Server.Plug가 컴파일되지 않았습니다.
         컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
@@ -172,9 +169,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
   end
 end
 
-# 하위 Plug 구현은 `:plug`이 있을 때만 컴파일된다. 이렇게 해야
-# `:plug`/`:bandit`을 설치하지 않은 소비자도 라이브러리의 비-로그인
-# 기능(refresh 등)을 그대로 사용할 수 있다.
 if Code.ensure_loaded?(Plug) do
   defmodule Pado.LLMRouter.OAuth.Callback.Server.Plug do
     @moduledoc false

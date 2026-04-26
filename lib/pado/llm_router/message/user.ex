@@ -8,10 +8,8 @@ defmodule Pado.LLMRouter.Message.User do
 
   ## 예
 
-      # 순수 텍스트
       Pado.LLMRouter.Message.User.new("안녕")
 
-      # 텍스트 + 이미지
       Pado.LLMRouter.Message.User.new([
         {:text, "이 사진을 설명해줘"},
         {:image, %{media_type: "image/png", data: binary}}

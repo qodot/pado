@@ -1,19 +1,4 @@
 #!/bin/bash
-# ChatGPT Codex 엔드포인트(/codex/responses) 수동 검증용 프로브.
-#
-# Elixir 어댑터를 짜기 전에 "헤더·바디 조합이 서버에 실제로 통하는지"를
-# 순수 HTTP 레이어에서 확인하기 위한 스크립트다. 서버가 돌려주는 SSE
-# 덩어리를 파일로 떨궈 이후 파서 구현·테스트 자산으로 쓴다.
-#
-# 사용:
-#   ./scripts/codex_probe.sh <creds.json> [질문] [출력경로]
-#
-# 예:
-#   mix pado.llm_router.login --output ~/.config/pado/openai.json
-#   ./scripts/codex_probe.sh ~/.config/pado/openai.json "Say hello in one word."
-#
-# 기본 출력 경로는 /tmp/pado-codex-response.sse 이다.
-# 응답은 stdout에도 스트리밍되므로 진행 상황을 실시간으로 볼 수 있다.
 
 set -euo pipefail
 
@@ -32,7 +17,6 @@ USAGE
   exit 1
 fi
 
-# --- 크레덴셜 파싱 (jq 가 있으면 jq, 없으면 python3) ---
 if command -v jq >/dev/null 2>&1; then
   ACCESS=$(jq -r '.access' "$CREDS_FILE")
   ACCOUNT_ID=$(jq -r '.extra.account_id' "$CREDS_FILE")
@@ -57,7 +41,6 @@ fi
 
 SESSION_ID="probe-$(date +%s)-$$"
 
-# --- 요청 바디 조립 (Pi 의 buildRequestBody 와 동일한 최소 형태) ---
 BODY=$(
   python3 - "$QUERY" "$MODEL" "$SESSION_ID" <<'PYEOF'
 import json, sys
@@ -91,7 +74,6 @@ echo "=> session_id: $SESSION_ID"
 echo "=> 저장 경로 : $OUTPUT"
 echo "──────────────────────────────────────────────────────────"
 
-# --- SSE 스트리밍 (-N: 버퍼링 끄고 즉시 출력) ---
 curl -sS -N \
   -X POST "https://chatgpt.com/backend-api/codex/responses" \
   -H "Authorization: Bearer $ACCESS" \

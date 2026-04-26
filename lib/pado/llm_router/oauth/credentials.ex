@@ -112,8 +112,6 @@ defmodule Pado.LLMRouter.OAuth.Credentials do
 
   def from_map(_), do: {:error, :invalid_map}
 
-  # --- 내부 구현 ---
-
   defp fetch(map, key) do
     case map do
       %{^key => v} when not is_nil(v) ->

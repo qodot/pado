@@ -93,8 +93,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
     ]
   end
 
-  # --- 메시지 변환 ---
-
   defp encode_messages(messages), do: Enum.flat_map(messages, &encode_message/1)
 
   defp encode_message(%User{content: text}) when is_binary(text) do
@@ -168,8 +166,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
     ]
   end
 
-  # --- 도구 변환 ---
-
   defp encode_tools(nil), do: nil
   defp encode_tools([]), do: nil
 
@@ -183,8 +179,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
       }
     end)
   end
-
-  # --- 기타 ---
 
   defp build_reasoning(opts) do
     case Keyword.get(opts, :reasoning_effort) do

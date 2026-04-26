@@ -37,8 +37,8 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.SSE do
   ## 예
 
       {events, buffer} = SSE.parse_chunk("", "event: foo\\ndata: bar\\n\\n")
-      # events: [%SSE.Event{event: "foo", data: "bar"}]
-      # buffer: ""
+      events == [%SSE.Event{event: "foo", data: "bar"}]
+      buffer == ""
   """
   @spec parse_chunk(binary, binary) :: {[Event.t()], binary}
   def parse_chunk(buffer, chunk) when is_binary(buffer) and is_binary(chunk) do
@@ -76,8 +76,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.SSE do
     end)
   end
 
-  # --- 내부 구현 ---
-
   defp parse_block(block) do
     block
     |> String.split("\n")
@@ -89,9 +87,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.SSE do
     end)
   end
 
-  # `:`으로 시작하면 주석
   defp parse_line(":" <> _), do: nil
-  # 빈 줄 무시 (블록 분할 후에도 남아있을 수 있음)
   defp parse_line(""), do: nil
 
   defp parse_line(line) do
@@ -101,7 +97,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.SSE do
     end
   end
 
-  # 사양상 ': '의 공백 한 칸은 제거 (실제 값에서 뺀다)
   defp trim_leading_space(" " <> rest), do: rest
   defp trim_leading_space(other), do: other
 

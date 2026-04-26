@@ -36,8 +36,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
 
   require Logger
 
-  # --- OAuth 상수(등록된 클라이언트와 일치해야 한다) ---
-
   @client_id "app_EMoamEEZ73f0CkXaXp7hrann"
   @authorize_url "https://auth.openai.com/oauth/authorize"
   @token_url "https://auth.openai.com/oauth/token"
@@ -46,8 +44,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   @jwt_claim_path "https://api.openai.com/auth"
   @default_originator "pi"
   @default_timeout 300_000
-
-  # --- Provider 콜백 구현 ---
 
   @impl true
   def id, do: :openai_codex
@@ -98,8 +94,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   @impl true
   def api_key(%Credentials{access: access}), do: access
 
-  # --- 공개 헬퍼(테스트와 다른 프로바이더 구현에서도 사용) ---
-
   @doc "Codex access 토큰(JWT)에서 `chatgpt_account_id`를 추출한다."
   @spec parse_account_id(String.t()) :: {:ok, String.t()} | {:error, term}
   def parse_account_id(access_token) when is_binary(access_token) do
@@ -146,8 +140,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
     end
   end
 
-  # --- 내부 구현: 플로우 조합 ---
-
   defp collect_code(url, state, callbacks, timeout, opts) do
     case start_callback_server(state, opts) do
       {:ok, server} ->
@@ -184,8 +176,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   end
 
   defp start_callback_server(state, opts) do
-    # 테스트에서는 :port/:host를 덮어쓸 수 있게 한다. 운영에서는 프로토콜이
-    # 요구하는 기본값을 그대로 둬야 한다.
     server_opts =
       opts
       |> Keyword.take([:port, :host])
@@ -230,8 +220,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   end
 
   defp prompt_fallback(_callbacks, _state), do: nil
-
-  # --- 내부 구현: HTTP ---
 
   defp build_authorize_url(challenge, state, originator) do
     query =
@@ -298,8 +286,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   defp validate_token_response(body),
     do: {:error, {:invalid_token_response, body}}
 
-  # --- 내부 구현: 입력 파싱 헬퍼 ---
-
   defp parse_full_url(value) do
     case URI.new(value) do
       {:ok, %URI{query: nil}} ->
@@ -330,8 +316,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   defp maybe_put(map, _key, ""), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  # base64url 입력은 패딩이 없이 올 수 있다. Base.url_decode64 호출 전에
-  # 길이를 4의 배수로 맞춰준다.
   defp pad_base64(s) do
     case rem(byte_size(s), 4) do
       0 -> s

@@ -58,8 +58,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
   def stream_text(%Model{id: id}, _ctx, _opts),
     do: {:error, {:unsupported_model, id}}
 
-  # --- 크레덴셜 검증 ---
-
   defp fetch_credentials(opts) do
     case Keyword.get(opts, :credentials) do
       %Credentials{provider: :openai_codex} = c -> {:ok, c}
@@ -72,8 +70,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
     do: {:ok, id}
 
   defp fetch_account_id(_), do: {:error, :missing_account_id}
-
-  # --- HTTP 호출 + 스트림 구성 ---
 
   defp open_stream(url, headers, body, model, opts) do
     receive_timeout = Keyword.get(opts, :receive_timeout, @default_receive_timeout)
@@ -99,7 +95,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
     end
   end
 
-  # status 라인이 올 때까지 대기.
   defp await_status(ref, timeout) do
     receive do
       {^ref, {:status, status}} -> {:ok, status}
@@ -109,7 +104,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
     end
   end
 
-  # 2xx 바디 청크 스트림.
   defp data_stream(ref, timeout) do
     Stream.resource(
       fn -> %{ref: ref, timeout: timeout, halted: false} end,
@@ -134,7 +128,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
     )
   end
 
-  # non-2xx 응답 바디 전부 수집.
   defp drain_error_body(ref, timeout), do: drain_error_body(ref, timeout, [])
 
   defp drain_error_body(ref, timeout, acc) do
@@ -149,8 +142,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
   end
 
   defp finalize_body(acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
-
-  # --- 에러 이벤트 생성 ---
 
   defp http_error_event(model, status, body) do
     msg = "HTTP #{status}: #{body}"
