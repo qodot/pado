@@ -4,17 +4,13 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
 
   @endpoint_path "/codex/responses"
 
-  def ensure_session_id(opts) when is_list(opts) do
-    Keyword.put_new_lazy(opts, :session_id, &generate_session_id/0)
-  end
-
   def endpoint_url(%Model{base_url: nil}), do: raise("Model.base_url is nil")
 
   def endpoint_url(%Model{base_url: base_url}) do
     String.trim_trailing(base_url, "/") <> @endpoint_path
   end
 
-  def build_body(%Model{} = model, %Context{} = ctx, opts \\ []) do
+  def build_body(%Model{} = model, %Context{} = ctx, session_id, opts \\ []) do
     %{
       "model" => model.id,
       "store" => false,
@@ -23,7 +19,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
       "input" => encode_messages(ctx.messages),
       "text" => %{"verbosity" => Keyword.get(opts, :verbosity, "medium")},
       "include" => ["reasoning.encrypted_content"],
-      "prompt_cache_key" => Keyword.get_lazy(opts, :session_id, &generate_session_id/0),
+      "prompt_cache_key" => session_id,
       "tool_choice" => Keyword.get(opts, :tool_choice, "auto"),
       "parallel_tool_calls" => Keyword.get(opts, :parallel_tool_calls, true)
     }
@@ -32,8 +28,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
     |> maybe_put("reasoning", build_reasoning(opts))
   end
 
-  def build_headers(access_token, account_id, opts \\ []) do
-    session_id = Keyword.get_lazy(opts, :session_id, &generate_session_id/0)
+  def build_headers(access_token, account_id, session_id, opts \\ []) do
     originator = Keyword.get(opts, :originator, "pi")
 
     [
@@ -147,10 +142,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
           "summary" => Keyword.get(opts, :reasoning_summary, "auto")
         }
     end
-  end
-
-  defp generate_session_id do
-    "pado-" <> (16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower))
   end
 
   defp user_agent do

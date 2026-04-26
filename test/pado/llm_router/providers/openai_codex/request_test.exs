@@ -15,7 +15,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
     assert Request.endpoint_url(@model) == "https://chatgpt.example/backend-api/codex/responses"
   end
 
-  test "build_body/3는 사용자 메시지와 도구, reasoning 옵션을 Codex 포맷으로 변환한다" do
+  test "build_body/4는 사용자 메시지와 도구, reasoning 옵션을 Codex 포맷으로 변환한다" do
     tool =
       Tool.new("read_file", "파일을 읽는다.", %{
         "type" => "object",
@@ -36,8 +36,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
       )
 
     body =
-      Request.build_body(@model, ctx,
-        session_id: "session-1",
+      Request.build_body(@model, ctx, "session-1",
         reasoning_effort: :low,
         temperature: 0.2
       )
@@ -74,7 +73,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
            ]
   end
 
-  test "build_body/3는 assistant 도구 호출과 도구 결과를 이어지는 input으로 변환한다" do
+  test "build_body/4는 assistant 도구 호출과 도구 결과를 이어지는 input으로 변환한다" do
     assistant = %Assistant{
       content: [
         {:text, "파일을 읽겠습니다."},
@@ -85,7 +84,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
     result = ToolResult.text("call_1", "read_file", "# Pado")
     ctx = Context.new(messages: [assistant, result])
 
-    input = Request.build_body(@model, ctx, session_id: "session-1")["input"]
+    input = Request.build_body(@model, ctx, "session-1")["input"]
 
     assert [message, function_call, function_output] = input
 
@@ -110,12 +109,9 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
            }
   end
 
-  test "build_headers/3는 Codex SSE 호출에 필요한 헤더를 만든다" do
+  test "build_headers/4는 Codex SSE 호출에 필요한 헤더를 만든다" do
     headers =
-      Request.build_headers("access_dummy", "acct_dummy",
-        session_id: "session-1",
-        originator: "pi"
-      )
+      Request.build_headers("access_dummy", "acct_dummy", "session-1", originator: "pi")
 
     assert {"authorization", "Bearer access_dummy"} in headers
     assert {"chatgpt-account-id", "acct_dummy"} in headers
@@ -131,12 +127,11 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
            end)
   end
 
-  test "ensure_session_id/1는 헤더와 바디가 같은 session_id를 쓰게 한다" do
-    opts = Request.ensure_session_id([])
-    session_id = Keyword.fetch!(opts, :session_id)
+  test "build_body/4와 build_headers/4는 전달된 session_id를 그대로 사용한다" do
+    session_id = "session-1"
 
-    headers = Request.build_headers("access_dummy", "acct_dummy", opts)
-    body = Request.build_body(@model, Context.new(), opts)
+    headers = Request.build_headers("access_dummy", "acct_dummy", session_id)
+    body = Request.build_body(@model, Context.new(), session_id)
 
     assert {"session_id", session_id} in headers
     assert {"x-client-request-id", session_id} in headers
