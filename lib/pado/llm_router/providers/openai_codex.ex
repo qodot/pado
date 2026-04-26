@@ -10,14 +10,19 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
   @default_receive_timeout 300_000
 
   @impl true
-  def stream(%Model{provider: :openai_codex} = model, %Context{} = ctx, opts)
+  def stream(
+        %Model{provider: :openai_codex} = model,
+        %Context{} = ctx,
+        %Credentials{} = credentials,
+        opts
+      )
       when is_list(opts) do
     session_id = Keyword.get(opts, :session_id) || generate_session_id()
 
-    with {:ok, creds} <- fetch_credentials(opts),
-         {:ok, account_id} <- fetch_account_id(creds) do
+    with :ok <- validate_credentials(credentials),
+         {:ok, account_id} <- fetch_account_id(credentials) do
       url = Request.endpoint_url(model)
-      headers = Request.build_headers(creds.access, account_id, session_id, opts)
+      headers = Request.build_headers(credentials.access, account_id, session_id, opts)
       body = Request.build_body(model, ctx, session_id, opts) |> Jason.encode!()
 
       stream = open_stream(url, headers, body, model, opts)
@@ -25,16 +30,14 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
     end
   end
 
-  def stream(%Model{id: id}, _ctx, _opts),
+  @impl true
+  def stream(%Model{id: id}, _ctx, _credentials, _opts),
     do: {:error, {:unsupported_model, id}}
 
-  defp fetch_credentials(opts) do
-    case Keyword.get(opts, :credentials) do
-      %Credentials{provider: :openai_codex} = c -> {:ok, c}
-      %Credentials{provider: p} -> {:error, {:wrong_provider_credentials, p}}
-      _ -> {:error, :missing_credentials}
-    end
-  end
+  defp validate_credentials(%Credentials{provider: :openai_codex}), do: :ok
+
+  defp validate_credentials(%Credentials{provider: p}),
+    do: {:error, {:wrong_provider_credentials, p}}
 
   defp fetch_account_id(%Credentials{extra: %{"account_id" => id}}) when is_binary(id),
     do: {:ok, id}
