@@ -7,7 +7,7 @@ defmodule Pado.LLMRouter do
 
   def stream(%Model{provider: provider} = model, %Context{} = ctx, opts \\ []) do
     case Map.fetch(@provider_map, provider) do
-      {:ok, adapter} -> adapter.stream(model, ctx, opts)
+      {:ok, provider_module} -> provider_module.stream(model, ctx, opts)
       :error -> {:error, {:unsupported_provider, provider}}
     end
   end

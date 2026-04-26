@@ -1,5 +1,5 @@
 defmodule Pado.LLMRouter.Providers.OpenAICodex do
-  @behaviour Pado.LLMRouter.Adapter
+  @behaviour Pado.LLMRouter.Provider
 
   alias Pado.LLMRouter.{Context, Model, Usage}
   alias Pado.LLMRouter.Message.Assistant

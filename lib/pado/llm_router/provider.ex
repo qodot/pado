@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.Adapter do
+defmodule Pado.LLMRouter.Provider do
   alias Pado.LLMRouter.{Context, Model}
 
   @type event_stream :: Enumerable.t()

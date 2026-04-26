@@ -91,7 +91,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 | 모듈 | 역할 |
 |---|---|
 | `Pado.LLMRouter` | `stream/3` 공개 진입점 |
-| `Pado.LLMRouter.Adapter` | 프로바이더 호출 어댑터 behaviour |
+| `Pado.LLMRouter.Provider` | 프로바이더 호출 behaviour |
 | `Pado.LLMRouter.Model` | 모델 메타데이터와 비용 계산 |
 | `Pado.LLMRouter.Context` | 시스템 프롬프트, 메시지, 도구 목록 입력 묶음 |
 | `Pado.LLMRouter.Message.*` | User/Assistant/ToolResult 메시지 구조체 |
