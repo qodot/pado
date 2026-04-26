@@ -2,7 +2,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
   @moduledoc """
   `/codex/responses` 엔드포인트에 보낼 HTTP 요청(URL·헤더·바디)을 조립한다.
 
-  순수 함수만 담는다. 실제 송신은 상위 어댑터(`OpenAICodex.Responses`)가
+  순수 함수만 담는다. 실제 송신은 상위 어댑터(`OpenAICodex`)가
   수행한다. Pi 의 `buildRequestBody` / `buildSSEHeaders` / `resolveCodexUrl`
   에 대응한다.
 

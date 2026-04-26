@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
+defmodule Pado.LLMRouter.Providers.OpenAICodex do
   @moduledoc """
   ChatGPT Codex `/codex/responses` 엔드포인트용 어댑터.
 

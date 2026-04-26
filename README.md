@@ -102,7 +102,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 | `Pado.LLMRouter.Providers.OpenAICodex.Request` | `/codex/responses` 요청 URL·헤더·바디 조립 |
 | `Pado.LLMRouter.Providers.OpenAICodex.SSE` | Server-Sent Events 청크 파서 |
 | `Pado.LLMRouter.Providers.OpenAICodex.EventMapper` | Codex SSE 이벤트를 Pado 이벤트로 정규화 |
-| `Pado.LLMRouter.Providers.OpenAICodex.Responses` | Finch 기반 실제 스트리밍 어댑터 |
+| `Pado.LLMRouter.Providers.OpenAICodex` | Finch 기반 실제 스트리밍 어댑터 |
 | `Pado.LLMRouter.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
 | `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
 | `Pado.LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |

@@ -38,7 +38,7 @@ defmodule Pado.LLMRouter do
   alias Pado.LLMRouter.{Context, Model}
 
   @provider_map %{
-    openai_codex: Pado.LLMRouter.Providers.OpenAICodex.Responses
+    openai_codex: Pado.LLMRouter.Providers.OpenAICodex
   }
 
   @doc """
