@@ -177,7 +177,8 @@ creds =
 model = OpenAICodexCatalog.default()
 ctx = Context.new(messages: [User.new("안녕. 한 문장으로 자기소개해줘.")])
 
-{:ok, stream} = LLMRouter.stream(model, ctx, creds, reasoning_effort: :low)
+session_id = "session-1"
+{:ok, stream} = LLMRouter.stream(model, ctx, creds, session_id, reasoning_effort: :low)
 
 Enum.each(stream, fn
   {:text_delta, %{delta: delta}} -> IO.write(delta)

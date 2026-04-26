@@ -14,11 +14,9 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
         %Model{provider: :openai_codex} = model,
         %Context{} = ctx,
         %Credentials{} = credentials,
+        session_id,
         opts
-      )
-      when is_list(opts) do
-    session_id = Keyword.get(opts, :session_id) || generate_session_id()
-
+      ) do
     with :ok <- validate_credentials(credentials),
          {:ok, account_id} <- fetch_account_id(credentials) do
       url = Request.endpoint_url(model)
@@ -31,7 +29,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
   end
 
   @impl true
-  def stream(%Model{id: id}, _ctx, _credentials, _opts),
+  def stream(%Model{id: id}, _ctx, _credentials, _session_id, _opts),
     do: {:error, {:unsupported_model, id}}
 
   defp validate_credentials(%Credentials{provider: :openai_codex}), do: :ok
@@ -43,10 +41,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
     do: {:ok, id}
 
   defp fetch_account_id(_), do: {:error, :missing_account_id}
-
-  defp generate_session_id do
-    "pado-" <> (16 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower))
-  end
 
   defp open_stream(url, headers, body, model, opts) do
     receive_timeout = Keyword.get(opts, :receive_timeout, @default_receive_timeout)

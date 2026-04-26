@@ -12,8 +12,11 @@ defmodule Pado.LLMRouterTest do
 
     credentials = Credentials.build(:openai_codex, "access", "refresh", 3600)
 
-    assert {:error, {:unsupported_provider, :dummy}} = LLMRouter.stream(model, ctx, credentials)
-    assert {:error, {:unsupported_provider, :dummy}} = LLMRouter.stream(model, ctx, credentials)
+    assert {:error, {:unsupported_provider, :dummy}} =
+             LLMRouter.stream(model, ctx, credentials, "session-1")
+
+    assert {:error, {:unsupported_provider, :dummy}} =
+             LLMRouter.stream(model, ctx, credentials, "session-1")
   end
 
   test "OpenAI Codex 어댑터는 크레덴셜을 사전 검증한다" do
@@ -23,10 +26,11 @@ defmodule Pado.LLMRouterTest do
     wrong_provider = Credentials.build(:other_provider, "access", "refresh", 3600)
 
     assert {:error, {:wrong_provider_credentials, :other_provider}} =
-             LLMRouter.stream(model, ctx, wrong_provider)
+             LLMRouter.stream(model, ctx, wrong_provider, "session-1")
 
     missing_account_id = Credentials.build(:openai_codex, "access", "refresh", 3600)
 
-    assert {:error, :missing_account_id} = LLMRouter.stream(model, ctx, missing_account_id)
+    assert {:error, :missing_account_id} =
+             LLMRouter.stream(model, ctx, missing_account_id, "session-1")
   end
 end
