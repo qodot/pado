@@ -132,4 +132,15 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
            end)
   end
 
+  test "ensure_session_id/1는 헤더와 바디가 같은 session_id를 쓰게 한다" do
+    opts = Request.ensure_session_id([])
+    session_id = Keyword.fetch!(opts, :session_id)
+
+    headers = Request.build_headers("access_dummy", "acct_dummy", opts)
+    body = Request.build_body(@model, Context.new(), opts)
+
+    assert {"session_id", session_id} in headers
+    assert {"x-client-request-id", session_id} in headers
+    assert body["prompt_cache_key"] == session_id
+  end
 end

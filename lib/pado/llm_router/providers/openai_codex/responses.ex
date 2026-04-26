@@ -42,6 +42,8 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
   @impl true
   def stream_text(%Model{api: :openai_codex_responses} = model, %Context{} = ctx, opts)
       when is_list(opts) do
+    opts = Request.ensure_session_id(opts)
+
     with {:ok, creds} <- fetch_credentials(opts),
          {:ok, account_id} <- fetch_account_id(creds) do
       url = Request.endpoint_url(model)

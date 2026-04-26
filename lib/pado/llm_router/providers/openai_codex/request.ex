@@ -23,6 +23,12 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Request do
 
   @endpoint_path "/codex/responses"
 
+  @doc "요청 전체에서 공유할 `:session_id`가 없으면 새로 넣는다."
+  @spec ensure_session_id(keyword) :: keyword
+  def ensure_session_id(opts) when is_list(opts) do
+    Keyword.put_new_lazy(opts, :session_id, &generate_session_id/0)
+  end
+
   @doc "POST 할 전체 URL."
   @spec endpoint_url(Model.t()) :: String.t()
   def endpoint_url(%Model{base_url: nil}), do: raise("Model.base_url is nil")
