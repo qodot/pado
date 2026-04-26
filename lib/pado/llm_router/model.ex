@@ -2,9 +2,9 @@ defmodule Pado.LLMRouter.Model do
   @moduledoc """
   LLM 모델 메타데이터.
 
-  `Pado.LLMRouter.stream_text/3` 등에 넘겨 어떤 모델로 어떤 엔드포인트에
-  요청을 보낼지 결정한다. 프로바이더 어댑터는 이 구조체의 `:provider`와
-  `:api` 필드를 보고 자기 호출이 맞는지 확인한다.
+  `Pado.LLMRouter.stream/3` 등에 넘겨 어떤 모델로 어떤 엔드포인트에
+  요청을 보낼지 결정한다. 프로바이더 어댑터는 이 구조체의 `:provider`를
+  보고 자기 호출이 맞는지 확인한다.
 
   ## 필드
 
@@ -12,9 +12,6 @@ defmodule Pado.LLMRouter.Model do
       (예: `"gpt-5.1"`, `"claude-opus-4-5"`).
     * `:name` — 사람이 읽는 이름.
     * `:provider` — 크레덴셜과 OAuth 프로바이더 키. `%Credentials{provider: …}`와 매칭.
-    * `:api` — 호출에 사용할 어댑터 키 (예: `:openai_codex_responses`,
-      `:anthropic_messages`). 한 프로바이더가 여러 API shape를 지원하므로
-      `provider`와 분리한다.
     * `:base_url` — 프로바이더 API 기본 URL.
     * `:context_window` — 허용 최대 입력 토큰.
     * `:max_tokens` — 응답에서 허용되는 최대 출력 토큰.
@@ -26,8 +23,6 @@ defmodule Pado.LLMRouter.Model do
   """
 
   @type provider :: atom
-  @type api :: atom
-
   @type cost_table :: %{
           input: float,
           output: float,
@@ -39,7 +34,6 @@ defmodule Pado.LLMRouter.Model do
           id: String.t(),
           name: String.t() | nil,
           provider: provider,
-          api: api,
           base_url: String.t() | nil,
           context_window: non_neg_integer,
           max_tokens: non_neg_integer,
@@ -50,12 +44,11 @@ defmodule Pado.LLMRouter.Model do
           headers: %{optional(String.t()) => String.t()}
         }
 
-  @enforce_keys [:id, :provider, :api]
+  @enforce_keys [:id, :provider]
   defstruct [
     :id,
     :name,
     :provider,
-    :api,
     :base_url,
     context_window: 0,
     max_tokens: 0,

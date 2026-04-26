@@ -36,11 +36,11 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
   @default_receive_timeout 300_000
 
   @impl true
-  def supports?(%Model{api: :openai_codex_responses}), do: true
+  def supports?(%Model{provider: :openai_codex}), do: true
   def supports?(_), do: false
 
   @impl true
-  def stream_text(%Model{api: :openai_codex_responses} = model, %Context{} = ctx, opts)
+  def stream(%Model{provider: :openai_codex} = model, %Context{} = ctx, opts)
       when is_list(opts) do
     opts = Request.ensure_session_id(opts)
 
@@ -55,7 +55,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
     end
   end
 
-  def stream_text(%Model{id: id}, _ctx, _opts),
+  def stream(%Model{id: id}, _ctx, _opts),
     do: {:error, {:unsupported_model, id}}
 
   defp fetch_credentials(opts) do

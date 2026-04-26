@@ -2,8 +2,7 @@ defmodule Pado.LLMRouter.Adapter do
   @moduledoc """
   LLM 프로바이더 어댑터 behaviour.
 
-  한 어댑터는 하나의 `Pado.LLMRouter.Model`의 `:api` 값에 대응한다.
-  예: `:openai_codex_responses` → `Pado.LLMRouter.Providers.OpenAICodex.Responses`.
+  한 어댑터는 하나의 `Pado.LLMRouter.Model`의 `:provider` 값에 대응한다.
 
   OAuth 프로바이더 behaviour(`Pado.LLMRouter.OAuth.Provider`)와는 별개다.
   OAuth 쪽은 인증 발급·갱신만, Adapter는 실제 LLM 호출을 담당한다.
@@ -33,7 +32,7 @@ defmodule Pado.LLMRouter.Adapter do
 
   네트워크 호출은 스트림 소비 시점에 일어날 수 있다(어댑터 구현 자유).
   """
-  @callback stream_text(Model.t(), Context.t(), opts) ::
+  @callback stream(Model.t(), Context.t(), opts) ::
               {:ok, event_stream} | {:error, term}
 
   @doc "이 어댑터가 주어진 모델을 처리할 수 있는지 확인한다."

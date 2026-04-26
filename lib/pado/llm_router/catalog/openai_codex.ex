@@ -28,7 +28,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
   alias Pado.LLMRouter.Model
 
   @base_url "https://chatgpt.com/backend-api"
-  @api :openai_codex_responses
   @provider :openai_codex
 
   @models %{
@@ -36,7 +35,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
       id: "gpt-5.2",
       name: "GPT-5.2",
       provider: @provider,
-      api: @api,
       base_url: @base_url,
       context_window: 272_000,
       max_tokens: 128_000,
@@ -49,7 +47,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
       id: "gpt-5.3-codex",
       name: "GPT-5.3 Codex",
       provider: @provider,
-      api: @api,
       base_url: @base_url,
       context_window: 272_000,
       max_tokens: 128_000,
@@ -62,7 +59,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
       id: "gpt-5.3-codex-spark",
       name: "GPT-5.3 Codex Spark",
       provider: @provider,
-      api: @api,
       base_url: @base_url,
       context_window: 128_000,
       max_tokens: 128_000,
@@ -75,7 +71,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
       id: "gpt-5.4",
       name: "GPT-5.4",
       provider: @provider,
-      api: @api,
       base_url: @base_url,
       context_window: 272_000,
       max_tokens: 128_000,
@@ -88,7 +83,6 @@ defmodule Pado.LLMRouter.Catalog.OpenAICodex do
       id: "gpt-5.4-mini",
       name: "GPT-5.4 Mini",
       provider: @provider,
-      api: @api,
       base_url: @base_url,
       context_window: 272_000,
       max_tokens: 128_000,

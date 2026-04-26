@@ -14,8 +14,7 @@ defmodule Pado.LLMRouter.Message.Assistant do
       `:stop | :length | :tool_use | :aborted | :error | nil`.
     * `:error_message` — `stop_reason`이 `:error` / `:aborted`일 때만 채워짐.
     * `:usage` — 이 응답을 만드는 데 든 토큰/비용. 스트림 종료 시점에 확정.
-    * `:provider`, `:model`, `:api` — 실제로 응답을 만든 프로바이더/모델
-      식별값. 다중 프로바이더 기록·감사용.
+    * `:provider`, `:model` — 실제로 응답을 만든 프로바이더/모델 식별값.
     * `:timestamp` — 응답 수신 시각.
   """
 
@@ -30,7 +29,6 @@ defmodule Pado.LLMRouter.Message.Assistant do
           usage: Usage.t() | nil,
           provider: Model.provider() | nil,
           model: String.t() | nil,
-          api: Model.api() | nil,
           timestamp: DateTime.t() | nil
         }
 
@@ -40,7 +38,6 @@ defmodule Pado.LLMRouter.Message.Assistant do
             usage: nil,
             provider: nil,
             model: nil,
-            api: nil,
             timestamp: nil
 
   @doc """
@@ -52,7 +49,6 @@ defmodule Pado.LLMRouter.Message.Assistant do
     %__MODULE__{
       provider: m.provider,
       model: m.id,
-      api: m.api,
       timestamp: DateTime.utc_now(),
       usage: Usage.empty()
     }

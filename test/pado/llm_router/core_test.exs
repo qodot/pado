@@ -102,7 +102,6 @@ defmodule Pado.LLMRouter.CoreTest do
     model = %Model{
       id: "dummy",
       provider: :dummy,
-      api: :dummy,
       cost: %{input: 2.0, output: 10.0, cache_read: 0.5, cache_write: 1.0}
     }
 

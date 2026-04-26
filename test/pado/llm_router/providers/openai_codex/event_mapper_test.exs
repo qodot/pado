@@ -8,7 +8,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapperTest do
   @model %Model{
     id: "gpt-test",
     provider: :openai_codex,
-    api: :openai_codex_responses,
     cost: %{input: 1.0, output: 10.0, cache_read: 0.5, cache_write: 0.0}
   }
 

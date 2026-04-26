@@ -8,7 +8,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RequestTest do
   @model %Model{
     id: "gpt-test",
     provider: :openai_codex,
-    api: :openai_codex_responses,
     base_url: "https://chatgpt.example/backend-api/"
   }
 

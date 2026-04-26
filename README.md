@@ -90,7 +90,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 
 | 모듈 | 역할 |
 |---|---|
-| `Pado.LLMRouter` | `stream_text/3`, `generate_text/3` 공개 진입점 |
+| `Pado.LLMRouter` | `stream/3` 공개 진입점 |
 | `Pado.LLMRouter.Adapter` | 프로바이더 호출 어댑터 behaviour |
 | `Pado.LLMRouter.Model` | 모델 메타데이터와 비용 계산 |
 | `Pado.LLMRouter.Context` | 시스템 프롬프트, 메시지, 도구 목록 입력 묶음 |
@@ -126,8 +126,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
   모델이 요청한 `tool_call`을 정규화된 Assistant 메시지로 돌려주는 데까지만
   책임진다. 실제 도구 실행과 다음 턴 반복은 향후 `Pado.Agent`의 책임이다.
 - **스트리밍은 이벤트 Enumerable로 노출한다.** 상위 계층은 토큰 델타,
-  tool_call 델타, 종료 이벤트를 그대로 소비하거나 `generate_text/3`로 최종
-  Assistant 메시지만 받을 수 있다.
+  tool_call 델타, 종료 이벤트를 그대로 소비한다.
 
 ### 사용 방법
 
@@ -178,7 +177,7 @@ creds =
 model = OpenAICodexCatalog.default()
 ctx = Context.new(messages: [User.new("안녕. 한 문장으로 자기소개해줘.")])
 
-{:ok, stream} = LLMRouter.stream_text(model, ctx, credentials: creds, reasoning_effort: :low)
+{:ok, stream} = LLMRouter.stream(model, ctx, credentials: creds, reasoning_effort: :low)
 
 Enum.each(stream, fn
   {:text_delta, %{delta: delta}} -> IO.write(delta)
@@ -187,13 +186,6 @@ Enum.each(stream, fn
   {:error, %{error_message: message}} -> IO.puts(:stderr, "오류: #{message}")
   _ -> :ok
 end)
-```
-
-최종 Assistant 메시지만 필요하면 `generate_text/3`를 쓴다.
-
-```elixir
-{:ok, message} = LLMRouter.generate_text(model, ctx, credentials: creds)
-IO.puts(Pado.LLMRouter.Message.text(message))
 ```
 
 > 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).
