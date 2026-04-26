@@ -13,34 +13,42 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
   def stream(
         %Model{provider: :openai_codex} = model,
         %Context{} = ctx,
-        %Credentials{} = credentials,
+        %Credentials{
+          provider: :openai_codex,
+          access: access,
+          extra: %{"account_id" => account_id}
+        },
         session_id,
         opts
       ) do
-    with :ok <- validate_credentials(credentials),
-         {:ok, account_id} <- fetch_account_id(credentials) do
-      url = Request.endpoint_url(model)
-      headers = Request.build_headers(credentials.access, account_id, session_id, opts)
-      body = Request.build_body(model, ctx, session_id, opts) |> Jason.encode!()
+    url = Request.endpoint_url(model)
+    headers = Request.build_headers(access, account_id, session_id, opts)
+    body = Request.build_body(model, ctx, session_id, opts) |> Jason.encode!()
 
-      stream = open_stream(url, headers, body, model, opts)
-      {:ok, stream}
-    end
+    stream = open_stream(url, headers, body, model, opts)
+    {:ok, stream}
   end
 
-  @impl true
-  def stream(%Model{id: id}, _ctx, _credentials, _session_id, _opts),
-    do: {:error, {:unsupported_model, id}}
+  def stream(
+        %Model{provider: :openai_codex},
+        _ctx,
+        %Credentials{provider: :openai_codex},
+        _session_id,
+        _opts
+      ),
+      do: {:error, :missing_account_id}
 
-  defp validate_credentials(%Credentials{provider: :openai_codex}), do: :ok
+  def stream(
+        %Model{provider: :openai_codex},
+        _ctx,
+        %Credentials{provider: provider},
+        _session_id,
+        _opts
+      ),
+      do: {:error, {:wrong_provider_credentials, provider}}
 
-  defp validate_credentials(%Credentials{provider: p}),
-    do: {:error, {:wrong_provider_credentials, p}}
-
-  defp fetch_account_id(%Credentials{extra: %{"account_id" => id}}) when is_binary(id),
-    do: {:ok, id}
-
-  defp fetch_account_id(_), do: {:error, :missing_account_id}
+  def stream(%Model{provider: provider}, _ctx, _credentials, _session_id, _opts),
+    do: {:error, {:unsupported_provider, provider}}
 
   defp open_stream(url, headers, body, model, opts) do
     receive_timeout = Keyword.get(opts, :receive_timeout, @default_receive_timeout)
