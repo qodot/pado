@@ -10,10 +10,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
   @default_receive_timeout 300_000
 
   @impl true
-  def supports?(%Model{provider: :openai_codex}), do: true
-  def supports?(_), do: false
-
-  @impl true
   def stream(%Model{provider: :openai_codex} = model, %Context{} = ctx, opts)
       when is_list(opts) do
     opts = Request.ensure_session_id(opts)

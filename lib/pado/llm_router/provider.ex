@@ -1,12 +1,6 @@
 defmodule Pado.LLMRouter.Provider do
   alias Pado.LLMRouter.{Context, Model}
 
-  @type event_stream :: Enumerable.t()
-
-  @type opts :: keyword
-
-  @callback stream(Model.t(), Context.t(), opts) ::
-              {:ok, event_stream} | {:error, term}
-
-  @callback supports?(Model.t()) :: boolean
+  @callback stream(Model.t(), Context.t(), keyword) ::
+              {:ok, Enumerable.t()} | {:error, term}
 end
