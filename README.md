@@ -6,10 +6,10 @@
 장기 실행되는 AI 에이전트를 만드는 데 필요한 계층을 쌓아 간다. 각 계층은 `Pado.*`
 네임스페이스 아래 독립된 하위 시스템으로 공존한다.
 
-> **상태: 초기 단계.** 현재 `Pado.LLMRouter`(LLM 프로바이더 API 클라이언트)만
-> 구현되어 있고, 그중에서도 OpenAI Codex(ChatGPT Plus/Pro 구독) OAuth 로그인과
-> 크레덴셜 모델만 갖춰져 있다. 실제 LLM 호출·스트리밍, 에이전트 루프, 웹 UI는
-> 아직 없다.
+> **상태: 초기 단계.** 현재는 `Pado.LLMRouter`(LLM 프로바이더 API 클라이언트)만
+> 구현 중이다. OpenAI Codex(ChatGPT Plus/Pro 구독) OAuth 로그인, 크레덴셜 모델,
+> `/codex/responses` 스트리밍 호출, SSE 파싱, 정규화 이벤트 매핑까지 1차 구현되어
+> 있다. 에이전트 루프와 웹 UI는 아직 없다.
 
 ---
 
@@ -77,7 +77,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 
 | 하위 시스템 | 상태 | 대응하는 참고 구현 |
 |---|---|---|
-| `Pado.LLMRouter` | **구현 중** (OAuth만) | `pi-ai`, `req_llm` |
+| `Pado.LLMRouter` | **구현 중** (OpenAI Codex OAuth + 스트리밍) | `pi-ai`, `req_llm` |
 | `Pado.Agent` | 미착수 | `pi-agent-core`, `jido` + `jido_ai` |
 | `Pado.Web` | 미착수 | (Pi의 `web-ui`, LiveView 통합) |
 
@@ -90,6 +90,19 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 
 | 모듈 | 역할 |
 |---|---|
+| `Pado.LLMRouter` | `stream_text/3`, `generate_text/3` 공개 진입점 |
+| `Pado.LLMRouter.Adapter` | 프로바이더 호출 어댑터 behaviour |
+| `Pado.LLMRouter.Model` | 모델 메타데이터와 비용 계산 |
+| `Pado.LLMRouter.Context` | 시스템 프롬프트, 메시지, 도구 목록 입력 묶음 |
+| `Pado.LLMRouter.Message.*` | User/Assistant/ToolResult 메시지 구조체 |
+| `Pado.LLMRouter.Tool` | LLM에 노출할 함수 도구 스키마 |
+| `Pado.LLMRouter.Usage` | 토큰 사용량과 비용 정규화 |
+| `Pado.LLMRouter.Event` | 스트리밍 이벤트 유니언 타입 |
+| `Pado.LLMRouter.Catalog.OpenAICodex` | ChatGPT 계정에서 호출 가능한 Codex 모델 카탈로그 |
+| `Pado.LLMRouter.Providers.OpenAICodex.Request` | `/codex/responses` 요청 URL·헤더·바디 조립 |
+| `Pado.LLMRouter.Providers.OpenAICodex.SSE` | Server-Sent Events 청크 파서 |
+| `Pado.LLMRouter.Providers.OpenAICodex.EventMapper` | Codex SSE 이벤트를 Pado 이벤트로 정규화 |
+| `Pado.LLMRouter.Providers.OpenAICodex.Responses` | Finch 기반 실제 스트리밍 어댑터 |
 | `Pado.LLMRouter.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
 | `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
 | `Pado.LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
@@ -109,6 +122,12 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
   콜백 맵으로 분리된다.
 - **`:bandit`/`:plug`는 선택 의존성**이다. 이미 크레덴셜을 가진 서비스(예:
   Vault에서 로드)는 콜백 서버를 깔 필요가 없다.
+- **`Pado.LLMRouter`는 도구를 실행하지 않는다.** 도구 목록을 모델에 알려주고,
+  모델이 요청한 `tool_call`을 정규화된 Assistant 메시지로 돌려주는 데까지만
+  책임진다. 실제 도구 실행과 다음 턴 반복은 향후 `Pado.Agent`의 책임이다.
+- **스트리밍은 이벤트 Enumerable로 노출한다.** 상위 계층은 토큰 델타,
+  tool_call 델타, 종료 이벤트를 그대로 소비하거나 `generate_text/3`로 최종
+  Assistant 메시지만 받을 수 있다.
 
 ### 사용 방법
 
@@ -130,14 +149,19 @@ $ mix pado.llm_router.login > ~/.config/pado/openai.json
 }
 ```
 
-#### 2. 앱에서 로드 + 자동 갱신
+#### 2. 앱에서 로드 + 자동 갱신 + 스트리밍 호출
 
 ```elixir
+alias Pado.LLMRouter
+alias Pado.LLMRouter.Catalog.OpenAICodex, as: OpenAICodexCatalog
+alias Pado.LLMRouter.Context
+alias Pado.LLMRouter.Message.User
 alias Pado.LLMRouter.OAuth.{Credentials, OpenAICodex}
 
+path = Path.expand("~/.config/pado/openai.json")
+
 {:ok, creds} =
-  "~/.config/pado/openai.json"
-  |> Path.expand()
+  path
   |> File.read!()
   |> Jason.decode!()
   |> Credentials.from_map()
@@ -145,17 +169,36 @@ alias Pado.LLMRouter.OAuth.{Credentials, OpenAICodex}
 creds =
   if Credentials.stale?(creds, 60) do
     {:ok, refreshed} = OpenAICodex.refresh(creds)
-    File.write!(path, Jason.encode!(Credentials.to_map(refreshed)))
+    File.write!(path, Jason.encode!(Credentials.to_map(refreshed), pretty: true))
     refreshed
   else
     creds
   end
 
-access_token = OpenAICodex.api_key(creds)
+model = OpenAICodexCatalog.default()
+ctx = Context.new(messages: [User.new("안녕. 한 문장으로 자기소개해줘.")])
+
+{:ok, stream} = LLMRouter.stream_text(model, ctx, credentials: creds, reasoning_effort: :low)
+
+Enum.each(stream, fn
+  {:text_delta, %{delta: delta}} -> IO.write(delta)
+  {:tool_call_start, %{name: name}} -> IO.puts("\n도구 호출 요청: #{name}")
+  {:done, %{usage: usage}} -> IO.puts("\n완료: #{inspect(usage)}")
+  {:error, %{error_message: message}} -> IO.puts(:stderr, "오류: #{message}")
+  _ -> :ok
+end)
+```
+
+최종 Assistant 메시지만 필요하면 `generate_text/3`를 쓴다.
+
+```elixir
+{:ok, message} = LLMRouter.generate_text(model, ctx, credentials: creds)
+IO.puts(Pado.LLMRouter.Message.text(message))
 ```
 
 > 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).
-> 반환된 크레덴셜을 반드시 저장해야 다음 갱신이 가능하다.
+> 반환된 크레덴셜을 반드시 저장해야 다음 갱신이 가능하다. 직접 HTTP 헤더를
+> 조립해야 하는 특수한 경우에는 `OpenAICodex.api_key/1`로 bearer 토큰을 꺼낼 수 있다.
 
 #### 3. `login/2`를 직접 호출 (Mix task 없이)
 
@@ -177,8 +220,10 @@ callbacks = %{
 
 구체적 약속이 아니라 방향성 스케치.
 
-- **Pado.LLMRouter 스트리밍** — `stream_text/3`, SSE 파서, `/codex/responses`
-  엔드포인트 클라이언트. Anthropic 직접 API 어댑터 추가.
+- **Pado.LLMRouter 안정화** — 단위/통합 테스트 확장, Codex HTTP 전송 계층 분리,
+  timeout/transport 오류 처리 정교화, reasoning/thinking 이벤트 매핑.
+- **프로바이더 확장** — Anthropic Messages API 직접 어댑터, 필요 시 `req_llm`
+  위임 어댑터, 모델 카탈로그 갱신 자동화.
 - **Pado.Agent** — `use Jido.Agent` 위에 Pi 스타일 에이전트 루프(턴 반복,
   도구 실행, steer/followUp 큐, 세분화된 이벤트 스트림)를 얇게 얹음.
   `jido_ai`의 ReAct 전략을 그대로 쓰기보다 루프 의사결정을 소유하는 쪽으로 기운다.
