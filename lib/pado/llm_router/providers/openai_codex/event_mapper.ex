@@ -21,7 +21,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
 
   `response.in_progress` / `response.content_part.added` / `content_part.done` /
   `output_item.done` 등은 의미 있는 정보를 더 주지 않으므로 버린다.
-  Reasoning 이벤트(`response.reasoning_*`)는 후속 커밋에서 지원한다.
 
   ## 누적 상태
 
@@ -40,6 +39,20 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
   alias Pado.LLMRouter.Providers.OpenAICodex.SSE
   alias Pado.LLMRouter.{Model, Usage}
 
+  @reasoning_delta_types [
+    "response.reasoning.delta",
+    "response.reasoning_text.delta",
+    "response.reasoning_summary.delta",
+    "response.reasoning_summary_text.delta"
+  ]
+
+  @reasoning_done_types [
+    "response.reasoning.done",
+    "response.reasoning_text.done",
+    "response.reasoning_summary.done",
+    "response.reasoning_summary_text.done"
+  ]
+
   @doc """
   Enumerable of `SSE.Event` → Enumerable of `Pado.LLMRouter.Event` 튜플.
   """
@@ -54,7 +67,8 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
       assistant: Assistant.init(model),
       current_item: nil,
       partial_text: "",
-      partial_args: ""
+      partial_args: "",
+      partial_thinking: ""
     }
   end
 
@@ -95,6 +109,18 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
 
     {[{:tool_call_start, %{index: idx, id: call_id, name: name}}],
      %{state | current_item: {:function_call, idx, call_id, name}, partial_args: ""}}
+  end
+
+  defp handle(
+         %{
+           "type" => "response.output_item.added",
+           "output_index" => idx,
+           "item" => %{"type" => "reasoning"}
+         },
+         state
+       ) do
+    {[{:thinking_start, %{index: idx}}],
+     %{state | current_item: {:reasoning, idx}, partial_thinking: ""}}
   end
 
   defp handle(
@@ -149,6 +175,34 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
 
     {[{:tool_call_end, %{index: idx}}],
      %{state | assistant: assistant, partial_args: "", current_item: nil}}
+  end
+
+  defp handle(%{"type" => type, "delta" => delta} = ev, state)
+       when type in @reasoning_delta_types do
+    idx = Map.get(ev, "output_index") || 0
+
+    {[{:thinking_delta, %{index: idx, delta: delta}}],
+     %{state | current_item: {:reasoning, idx}, partial_thinking: state.partial_thinking <> delta}}
+  end
+
+  defp handle(%{"type" => type} = ev, state) when type in @reasoning_done_types do
+    idx = Map.get(ev, "output_index") || 0
+
+    text =
+      case Map.get(ev, "text") do
+        text when is_binary(text) and text != "" -> text
+        _ -> state.partial_thinking
+      end
+
+    assistant =
+      if text == "" do
+        state.assistant
+      else
+        %{state.assistant | content: state.assistant.content ++ [{:thinking, text}]}
+      end
+
+    {[{:thinking_end, %{index: idx}}],
+     %{state | assistant: assistant, partial_thinking: "", current_item: nil}}
   end
 
   defp handle(%{"type" => "response.completed", "response" => response}, state) do

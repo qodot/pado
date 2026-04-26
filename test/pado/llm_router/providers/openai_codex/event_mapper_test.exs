@@ -103,6 +103,50 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapperTest do
            ]
   end
 
+  test "reasoning SSE 이벤트를 thinking 블록으로 누적한다" do
+    events =
+      [
+        ev(%{"type" => "response.created"}),
+        ev(%{
+          "type" => "response.output_item.added",
+          "output_index" => 0,
+          "item" => %{"type" => "reasoning"}
+        }),
+        ev(%{
+          "type" => "response.reasoning_summary_text.delta",
+          "output_index" => 0,
+          "delta" => "문제를 "
+        }),
+        ev(%{
+          "type" => "response.reasoning_summary_text.delta",
+          "output_index" => 0,
+          "delta" => "분해합니다."
+        }),
+        ev(%{
+          "type" => "response.reasoning_summary_text.done",
+          "output_index" => 0,
+          "text" => "문제를 분해합니다."
+        }),
+        ev(%{
+          "type" => "response.completed",
+          "response" => %{"status" => "completed", "usage" => %{"total_tokens" => 0}}
+        })
+      ]
+      |> EventMapper.map_stream(@model)
+      |> Enum.to_list()
+
+    assert [
+             {:start, _},
+             {:thinking_start, %{index: 0}},
+             {:thinking_delta, %{index: 0, delta: "문제를 "}},
+             {:thinking_delta, %{index: 0, delta: "분해합니다."}},
+             {:thinking_end, %{index: 0}},
+             {:done, done_payload}
+           ] = events
+
+    assert done_payload.message.content == [{:thinking, "문제를 분해합니다."}]
+  end
+
   test "오류 SSE 이벤트를 종료 error 이벤트로 변환한다" do
     assert [{:error, payload}] =
              [%SSE.Event{data: Jason.encode!(%{"type" => "error", "message" => "권한 오류"})}]
