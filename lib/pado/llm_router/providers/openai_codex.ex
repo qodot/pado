@@ -8,6 +8,8 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
 
   @finch_pool Req.Finch
   @default_receive_timeout 300_000
+  @default_max_retries 3
+  @default_retry_delay_ms 1_000
 
   @impl true
   def stream(
@@ -52,50 +54,98 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
 
   defp open_stream(url, headers, body, model, opts) do
     receive_timeout = Keyword.get(opts, :receive_timeout, @default_receive_timeout)
-
+    max_retries = Keyword.get(opts, :max_retries, @default_max_retries)
+    retry_delay_ms = Keyword.get(opts, :retry_delay_ms, @default_retry_delay_ms)
     request = Finch.build(:post, url, headers, body)
+
+    case start_request(request, receive_timeout, max_retries, retry_delay_ms) do
+      {:ok, ref} ->
+        events =
+          ref
+          |> data_stream(receive_timeout)
+          |> SSE.stream()
+          |> EventMapper.map_stream(model)
+
+        %RouterStream{events: events, cancel: fn -> cancel_ref(ref) end}
+
+      {:error, chunk} ->
+        events = [chunk] |> SSE.stream() |> EventMapper.map_stream(model)
+        %RouterStream{events: events, cancel: fn -> :ok end}
+    end
+  end
+
+  defp start_request(request, timeout, max_retries, retry_delay_ms) do
+    do_start_request(request, timeout, max_retries, retry_delay_ms, 0)
+  end
+
+  defp do_start_request(request, timeout, max_retries, retry_delay_ms, attempt) do
     ref = Finch.async_request(request, @finch_pool)
 
-    events =
-      ref
-      |> data_stream(receive_timeout)
-      |> SSE.stream()
-      |> EventMapper.map_stream(model)
+    receive do
+      {^ref, {:status, 200}} ->
+        {:ok, ref}
 
-    %RouterStream{events: events, cancel: fn -> Finch.cancel_async_request(ref) end}
+      {^ref, {:status, status}} ->
+        {body, headers} = drain_error_response(ref, timeout)
+        message = "HTTP #{status}: #{body}"
+
+        if retryable_status?(status) and attempt < max_retries do
+          sleep_before_retry(retry_delay_ms, attempt, retry_after_ms(headers))
+          do_start_request(request, timeout, max_retries, retry_delay_ms, attempt + 1)
+        else
+          {:error, stream_error_chunk(message)}
+        end
+
+      {^ref, {:error, reason}} ->
+        retry_transport_or_error(request, timeout, max_retries, retry_delay_ms, attempt, reason)
+    after
+      timeout ->
+        cancel_ref(ref)
+
+        retry_transport_or_error(
+          request,
+          timeout,
+          max_retries,
+          retry_delay_ms,
+          attempt,
+          :await_status_timeout
+        )
+    end
+  end
+
+  defp retry_transport_or_error(request, timeout, max_retries, retry_delay_ms, attempt, reason) do
+    if retryable_transport?(reason) and attempt < max_retries do
+      sleep_before_retry(retry_delay_ms, attempt, nil)
+      do_start_request(request, timeout, max_retries, retry_delay_ms, attempt + 1)
+    else
+      {:error, stream_error_chunk("transport error: #{inspect(reason)}")}
+    end
+  end
+
+  defp sleep_before_retry(_base, _attempt, ms) when is_integer(ms) and ms > 0,
+    do: Process.sleep(ms)
+
+  defp sleep_before_retry(base, attempt, _ms) do
+    delay = trunc(base * :math.pow(2, attempt))
+    if delay > 0, do: Process.sleep(delay)
+  end
+
+  defp cancel_ref(ref) do
+    _ = Finch.cancel_async_request(ref)
+    :ok
   end
 
   defp data_stream(ref, timeout) do
     Stream.resource(
-      fn -> %{ref: ref, timeout: timeout, phase: :status, halted: false} end,
+      fn -> %{ref: ref, timeout: timeout, halted: false} end,
       &next_chunk/1,
-      fn %{ref: ref} ->
-        _ = Finch.cancel_async_request(ref)
-        :ok
-      end
+      fn %{ref: ref} -> cancel_ref(ref) end
     )
   end
 
   defp next_chunk(%{halted: true} = s), do: {:halt, s}
 
-  defp next_chunk(%{phase: :status, ref: ref, timeout: timeout} = s) do
-    receive do
-      {^ref, {:status, 200}} ->
-        {[], %{s | phase: :data}}
-
-      {^ref, {:status, status}} ->
-        body = drain_error_body(ref, timeout)
-        {[stream_error_chunk("HTTP #{status}: #{body}")], %{s | halted: true}}
-
-      {^ref, {:error, reason}} ->
-        {[stream_error_chunk("transport error: #{inspect(reason)}")], %{s | halted: true}}
-    after
-      timeout ->
-        {[stream_error_chunk("transport error: :await_status_timeout")], %{s | halted: true}}
-    end
-  end
-
-  defp next_chunk(%{phase: :data, ref: ref, timeout: timeout} = s) do
+  defp next_chunk(%{ref: ref, timeout: timeout} = s) do
     receive do
       {^ref, {:headers, _}} ->
         {[], s}
@@ -113,16 +163,45 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
     end
   end
 
-  defp drain_error_body(ref, timeout), do: drain_error_body(ref, timeout, [])
+  defp retryable_status?(status), do: status in [429, 500, 502, 503, 504]
 
-  defp drain_error_body(ref, timeout, acc) do
+  defp retryable_transport?(%Mint.TransportError{reason: reason}),
+    do: retryable_transport?(reason)
+
+  defp retryable_transport?(%Req.TransportError{reason: reason}), do: retryable_transport?(reason)
+
+  defp retryable_transport?(reason),
+    do: reason in [:closed, :timeout, :econnrefused, :await_status_timeout]
+
+  defp retry_after_ms(headers) do
+    Enum.find_value(headers, fn
+      {name, value} when is_binary(name) ->
+        if String.downcase(name) == "retry-after", do: parse_retry_after(value)
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp parse_retry_after(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {seconds, _} when seconds >= 0 -> seconds * 1_000
+      _ -> nil
+    end
+  end
+
+  defp parse_retry_after(_), do: nil
+
+  defp drain_error_response(ref, timeout), do: drain_error_response(ref, timeout, [], [])
+
+  defp drain_error_response(ref, timeout, headers, acc) do
     receive do
-      {^ref, {:headers, _}} -> drain_error_body(ref, timeout, acc)
-      {^ref, {:data, chunk}} -> drain_error_body(ref, timeout, [chunk | acc])
-      {^ref, :done} -> finalize_body(acc)
-      {^ref, {:error, _}} -> finalize_body(acc)
+      {^ref, {:headers, headers}} -> drain_error_response(ref, timeout, headers, acc)
+      {^ref, {:data, chunk}} -> drain_error_response(ref, timeout, headers, [chunk | acc])
+      {^ref, :done} -> {finalize_body(acc), headers}
+      {^ref, {:error, _}} -> {finalize_body(acc), headers}
     after
-      timeout -> finalize_body(acc)
+      timeout -> {finalize_body(acc), headers}
     end
   end
 
