@@ -113,12 +113,19 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
 
         %{ref: ref, timeout: timeout} = s ->
           receive do
-            {^ref, {:headers, _}} -> {[], s}
-            {^ref, {:data, chunk}} -> {[chunk], s}
-            {^ref, :done} -> {:halt, %{s | halted: true}}
-            {^ref, {:error, reason}} -> raise "Finch stream error: #{inspect(reason)}"
+            {^ref, {:headers, _}} ->
+              {[], s}
+
+            {^ref, {:data, chunk}} ->
+              {[chunk], s}
+
+            {^ref, :done} ->
+              {:halt, %{s | halted: true}}
+
+            {^ref, {:error, reason}} ->
+              {[stream_error_chunk("Finch 스트림 오류: #{inspect(reason)}")], %{s | halted: true}}
           after
-            timeout -> raise "Finch stream timeout"
+            timeout -> {[stream_error_chunk("Finch 스트림 시간 초과")], %{s | halted: true}}
           end
       end,
       fn %{ref: ref} ->
@@ -142,6 +149,11 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.Responses do
   end
 
   defp finalize_body(acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
+
+  defp stream_error_chunk(message) do
+    data = Jason.encode!(%{"type" => "error", "message" => message})
+    "data: " <> data <> "\n\n"
+  end
 
   defp http_error_event(model, status, body) do
     msg = "HTTP #{status}: #{body}"
