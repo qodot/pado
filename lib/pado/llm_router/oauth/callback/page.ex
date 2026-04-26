@@ -1,14 +1,4 @@
 defmodule Pado.LLMRouter.OAuth.Callback.Page do
-  @moduledoc """
-  OAuth 콜백 랜딩 페이지를 위한 최소 HTML 템플릿.
-
-  pi-ai의 `utils/oauth/oauth-page.ts`와 대응된다. 프로바이더가
-  `localhost:1455`로 리다이렉트시킨 뒤 사용자 브라우저에 표시된다.
-  외부 CSS/JS 의존성이 없도록 의도적으로 자기완결 형태로 유지한다.
-  """
-
-  @doc "콜백이 정상 처리되었을 때 표시되는 성공 페이지."
-  @spec success_html(String.t()) :: String.t()
   def success_html(message \\ "인증이 완료되었습니다. 이 창을 닫아도 됩니다.") do
     render(%{
       title: "인증 성공",
@@ -18,8 +8,6 @@ defmodule Pado.LLMRouter.OAuth.Callback.Page do
     })
   end
 
-  @doc "콜백이 거절되었을 때 표시되는 오류 페이지."
-  @spec error_html(String.t(), String.t() | nil) :: String.t()
   def error_html(message, details \\ nil) do
     render(%{
       title: "인증 실패",

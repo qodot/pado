@@ -1,40 +1,4 @@
 defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
-  @moduledoc """
-  Codex `/codex/responses` SSE 이벤트를 `Pado.LLMRouter.Event` 유니언으로
-  정규화한다.
-
-  입력은 `Pado.LLMRouter.Providers.OpenAICodex.SSE.Event` 의 Enumerable 이고
-  (각 `data` 필드는 Codex JSON 이벤트 한 개), 출력은 우리 Event 튜플의
-  Enumerable 이다.
-
-  ## 처리하는 Codex 이벤트
-
-      response.created                          → {:start, ...}
-      response.output_item.added (message)      → {:text_start, ...}
-      response.output_item.added (function_call)→ {:tool_call_start, ...}
-      response.output_text.delta                → {:text_delta, ...}
-      response.output_text.done                 → {:text_end, ...}
-      response.function_call_arguments.delta    → {:tool_call_delta, ...}
-      response.function_call_arguments.done     → {:tool_call_end, ...}
-      response.completed                        → {:done, ...}
-      response.failed / error                   → {:error, ...}
-
-  `response.in_progress` / `response.content_part.added` / `content_part.done` /
-  `output_item.done` 등은 의미 있는 정보를 더 주지 않으므로 버린다.
-
-  ## 누적 상태
-
-  이 매퍼는 `Stream.transform/3` 안에서 가변 accumulator 역할을 하는 맵을
-  유지한다:
-
-    * `:assistant` — 지금까지 누적된 `Assistant` 메시지(최종 `{:done, _}`
-      시점에 완성된다).
-    * `:partial_text` — 아직 `text_done`이 오지 않은 현재 텍스트 블록 조각.
-    * `:partial_args` — 스트리밍 중인 tool_call 의 JSON args 조각.
-    * `:current_item` — 현재 진행 중인 output item (`message` or `function_call`).
-    * `:model` — usage/cost 계산용.
-  """
-
   alias Pado.LLMRouter.Message.Assistant
   alias Pado.LLMRouter.Providers.OpenAICodex.SSE
   alias Pado.LLMRouter.{Model, Usage}
@@ -53,10 +17,6 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     "response.reasoning_summary_text.done"
   ]
 
-  @doc """
-  Enumerable of `SSE.Event` → Enumerable of `Pado.LLMRouter.Event` 튜플.
-  """
-  @spec map_stream(Enumerable.t(), Model.t()) :: Enumerable.t()
   def map_stream(sse_events, %Model{} = model) do
     Stream.transform(sse_events, init_state(model), &step/2)
   end

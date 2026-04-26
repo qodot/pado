@@ -1,39 +1,7 @@
 defmodule Mix.Tasks.Pado.LlmRouter.Login do
-  @moduledoc """
-  LLM OAuth 프로바이더에 로그인해 크레덴셜을 JSON으로 출력한다.
-
-      $ mix pado.llm_router.login
-      $ mix pado.llm_router.login openai-codex
-      $ mix pado.llm_router.login --output creds.json
-
-  라이브러리의 콜백 인터페이스를 터미널 I/O에 배선한 최소 레퍼런스 CLI다.
-  pi-ai의 `packages/ai/src/cli.ts`와 대응된다.
-
-  ## 왜 Mix task인가?
-
-  공용 public OAuth 클라이언트의 `redirect_uri`가
-  `http://localhost:1455/auth/callback`으로 등록되어 있기 때문에,
-  로그인을 시작하는 머신에 브라우저가 있어야 한다. Mix task는 이
-  요건과 잘 맞는다. 개발자가 수동으로 돌리고, 짧은 수명을 가지며,
-  stdout에 접근할 수 있다.
-
-  이 task는 **런타임에 크레덴셜을 쓰는 방법이 아니라** 발급 전용이다.
-  출력된 JSON을 원하는 저장소(dotfile, Vault, 시크릿 매니저 등)에
-  보관하고, 서비스 기동 시 그것을 로드한다.
-
-  ## 옵션
-
-    * `--output <path>` — stdout 대신 파일에 JSON을 쓴다.
-    * `--originator <id>` — OAuth `originator` 파라미터를 덮어쓴다.
-    * `--timeout <ms>` — 기본 5분 대기 시간을 덮어쓴다.
-    * `--no-browser` — 브라우저 자동 열기를 끈다.
-  """
-
   use Mix.Task
 
   alias Pado.LLMRouter.OAuth.Credentials
-
-  @shortdoc "LLM OAuth 프로바이더에 로그인하고 크레덴셜을 JSON으로 출력한다"
 
   @provider_aliases %{
     "openai-codex" => Pado.LLMRouter.OAuth.OpenAICodex,

@@ -1,30 +1,4 @@
 defmodule Pado.LLMRouter.Providers.OpenAICodex do
-  @moduledoc """
-  ChatGPT Codex `/codex/responses` 엔드포인트용 어댑터.
-
-  `Pado.LLMRouter.Adapter` 구현체. 이 모듈이 하는 일:
-
-    1. 크레덴셜·account_id 추출.
-    2. `Request`로 URL·헤더·바디 조립.
-    3. `Finch.async_request/2`로 비동기 HTTP 요청.
-    4. `Stream.resource`로 청크 메시지를 Enumerable 바이너리로 변환.
-    5. `SSE.stream/1` → `EventMapper.map_stream/2` 파이프로
-       `Pado.LLMRouter.Event` 튜플 스트림 반환.
-
-  Finch 풀은 Req가 이미 띄운 `Req.Finch`를 재사용한다. 별도 Supervisor
-  설정이 필요 없다.
-
-  ## 오류 흐름
-
-    * 크레덴셜 누락·잘못된 provider 등 사전 검증 실패 → `{:error, reason}`
-    * HTTP 상태 non-2xx → 응답 바디를 모아서 `{:error, _}` 이벤트 **하나**만
-      담은 스트림
-    * Finch 전송 실패 → 같은 방식으로 `{:error, _}` 이벤트 하나
-
-  2xx 스트림 도중의 예외(타임아웃 등)는 Stream 소비자 쪽으로 raise 된다.
-  재시도는 에이전트 레이어(Pado.Agent) 책임이다.
-  """
-
   @behaviour Pado.LLMRouter.Adapter
 
   alias Pado.LLMRouter.{Context, Model, Usage}

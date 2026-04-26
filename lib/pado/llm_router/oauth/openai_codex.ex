@@ -1,35 +1,4 @@
 defmodule Pado.LLMRouter.OAuth.OpenAICodex do
-  @moduledoc """
-  OpenAI Codex("simplified") 플로우로 로그인한다. ChatGPT Plus/Pro
-  구독 자격으로 인증해 `https://chatgpt.com/backend-api/codex/responses`
-  엔드포인트에 쓸 토큰을 발급받는 경로다.
-
-  `Pado.LLMRouter.OAuth.Provider`를 구현한다. 구조는 pi-ai의
-  `utils/oauth/openai-codex.ts`를 거의 그대로 옮긴 것이다.
-
-  ## 공용 public 클라이언트
-
-  `client_id`와 등록된 `redirect_uri`(`localhost:1455`)는 Codex CLI
-  OAuth 앱의 공개된 값이며 pi-ai, 이 라이브러리, 다른 커뮤니티 도구가
-  함께 쓴다. 현재로서는 이 플로우용으로 독립 `client_id`를 등록할 공식
-  경로가 없다.
-
-  redirect URI가 서버에 등록되어 있어 클라이언트 측에서 바꿀 수 없다.
-  즉 **`login/2`를 시작하는 머신에서 브라우저를 열어야 한다.** 콜백을
-  원격 서버로 우회시킬 수 없다. 서버 사이드 OAuth가 필요하다면 사전에
-  얻어둔 크레덴셜로 `refresh/1`만 호출하는 방식으로 운영한다
-  (README 참고).
-
-  ## Originator
-
-  authorize URL의 `originator` 파라미터는 서버가 로그로 남기거나
-  클라이언트 구분에 쓸 수 있는 짧은 식별자다. Pi는 `"pi"`를 쓴다.
-  이 모듈도 기본값을 `"pi"`로 둔다. 업스트림 서버가 실제로 허용하는
-  값 중 확인된 것이 `"pi"`뿐이기 때문이다(보수적 기본값). 다른 값으로
-  실험하려면 `login/2`에 `originator: "llm-router"` 같은 옵션을
-  넘긴다.
-  """
-
   @behaviour Pado.LLMRouter.OAuth.Provider
 
   alias Pado.LLMRouter.OAuth.{Callback, Credentials, PKCE}
@@ -94,8 +63,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
   @impl true
   def api_key(%Credentials{access: access}), do: access
 
-  @doc "Codex access 토큰(JWT)에서 `chatgpt_account_id`를 추출한다."
-  @spec parse_account_id(String.t()) :: {:ok, String.t()} | {:error, term}
   def parse_account_id(access_token) when is_binary(access_token) do
     with [_h, payload_b64, _s] <- String.split(access_token, "."),
          {:ok, payload_json} <- Base.url_decode64(pad_base64(payload_b64), padding: true),
@@ -109,15 +76,6 @@ defmodule Pado.LLMRouter.OAuth.OpenAICodex do
     end
   end
 
-  @doc """
-  사용자가 수동으로 입력한 값을 파싱해 `%{code: code, state: state}`를
-  돌려준다. 인가 코드만 붙여넣는 경우, `code=…&state=…` 형태의
-  쿼리스트링, 리다이렉트 URL 전체 모두를 받아들인다.
-
-  pi-ai의 `parseAuthorizationInput`과 대응된다.
-  """
-  @spec parse_authorization_input(String.t()) ::
-          %{optional(:code) => String.t(), optional(:state) => String.t()}
   def parse_authorization_input(input) when is_binary(input) do
     value = String.trim(input)
 
