@@ -65,10 +65,10 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     %{
       model: model,
       assistant: Assistant.init(model),
-      current_item: nil,
-      partial_text: "",
-      partial_args: "",
-      partial_thinking: ""
+      items: %{},
+      partial_text: %{},
+      partial_args: %{},
+      partial_thinking: %{}
     }
   end
 
@@ -93,7 +93,12 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
          },
          state
        ) do
-    {[{:text_start, %{index: idx}}], %{state | current_item: {:message, idx}, partial_text: ""}}
+    {[{:text_start, %{index: idx}}],
+     %{
+       state
+       | items: Map.put(state.items, idx, {:message, idx}),
+         partial_text: Map.put(state.partial_text, idx, "")
+     }}
   end
 
   defp handle(
@@ -108,7 +113,11 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     name = Map.get(item, "name", "")
 
     {[{:tool_call_start, %{index: idx, id: call_id, name: name}}],
-     %{state | current_item: {:function_call, idx, call_id, name}, partial_args: ""}}
+     %{
+       state
+       | items: Map.put(state.items, idx, {:function_call, idx, call_id, name}),
+         partial_args: Map.put(state.partial_args, idx, "")
+     }}
   end
 
   defp handle(
@@ -120,15 +129,20 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
          state
        ) do
     {[{:thinking_start, %{index: idx}}],
-     %{state | current_item: {:reasoning, idx}, partial_thinking: ""}}
+     %{
+       state
+       | items: Map.put(state.items, idx, {:reasoning, idx}),
+         partial_thinking: Map.put(state.partial_thinking, idx, "")
+     }}
   end
 
   defp handle(
          %{"type" => "response.output_text.delta", "output_index" => idx, "delta" => delta},
          state
        ) do
-    {[{:text_delta, %{index: idx, delta: delta}}],
-     %{state | partial_text: state.partial_text <> delta}}
+    partial_text = append_partial(state.partial_text, idx, delta)
+
+    {[{:text_delta, %{index: idx, delta: delta}}], %{state | partial_text: partial_text}}
   end
 
   defp handle(
@@ -138,7 +152,12 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     content = state.assistant.content ++ [{:text, text}]
 
     {[{:text_end, %{index: idx}}],
-     %{state | assistant: %{state.assistant | content: content}, partial_text: ""}}
+     %{
+       state
+       | assistant: %{state.assistant | content: content},
+         partial_text: Map.delete(state.partial_text, idx),
+         items: Map.delete(state.items, idx)
+     }}
   end
 
   defp handle(
@@ -149,22 +168,25 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
          },
          state
        ) do
-    {[{:tool_call_delta, %{index: idx, delta: delta}}],
-     %{state | partial_args: state.partial_args <> delta}}
+    partial_args = append_partial(state.partial_args, idx, delta)
+
+    {[{:tool_call_delta, %{index: idx, delta: delta}}], %{state | partial_args: partial_args}}
   end
 
   defp handle(
          %{"type" => "response.function_call_arguments.done", "output_index" => idx},
          state
        ) do
+    args_text = Map.get(state.partial_args, idx, "")
+
     args =
-      case Jason.decode(state.partial_args) do
+      case Jason.decode(args_text) do
         {:ok, m} when is_map(m) -> m
         _ -> %{}
       end
 
     assistant =
-      case state.current_item do
+      case Map.get(state.items, idx) do
         {:function_call, ^idx, call_id, name} ->
           block = {:tool_call, %{id: call_id, name: name, args: args}}
           %{state.assistant | content: state.assistant.content ++ [block]}
@@ -174,15 +196,22 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
       end
 
     {[{:tool_call_end, %{index: idx}}],
-     %{state | assistant: assistant, partial_args: "", current_item: nil}}
+     %{
+       state
+       | assistant: assistant,
+         partial_args: Map.delete(state.partial_args, idx),
+         items: Map.delete(state.items, idx)
+     }}
   end
 
   defp handle(%{"type" => type, "delta" => delta} = ev, state)
        when type in @reasoning_delta_types do
     idx = Map.get(ev, "output_index") || 0
 
+    partial_thinking = append_partial(state.partial_thinking, idx, delta)
+
     {[{:thinking_delta, %{index: idx, delta: delta}}],
-     %{state | current_item: {:reasoning, idx}, partial_thinking: state.partial_thinking <> delta}}
+     %{state | partial_thinking: partial_thinking}}
   end
 
   defp handle(%{"type" => type} = ev, state) when type in @reasoning_done_types do
@@ -191,7 +220,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
     text =
       case Map.get(ev, "text") do
         text when is_binary(text) and text != "" -> text
-        _ -> state.partial_thinking
+        _ -> Map.get(state.partial_thinking, idx, "")
       end
 
     assistant =
@@ -202,7 +231,12 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
       end
 
     {[{:thinking_end, %{index: idx}}],
-     %{state | assistant: assistant, partial_thinking: "", current_item: nil}}
+     %{
+       state
+       | assistant: assistant,
+         partial_thinking: Map.delete(state.partial_thinking, idx),
+         items: Map.delete(state.items, idx)
+     }}
   end
 
   defp handle(%{"type" => "response.completed", "response" => response}, state) do
@@ -246,6 +280,10 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapper do
   end
 
   defp handle(_, state), do: {[], state}
+
+  defp append_partial(parts, idx, delta) do
+    Map.update(parts, idx, delta, &(&1 <> delta))
+  end
 
   defp build_usage(response, %Model{} = model) do
     u = response["usage"] || %{}

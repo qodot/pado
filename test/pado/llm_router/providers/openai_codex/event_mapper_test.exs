@@ -103,6 +103,58 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.EventMapperTest do
            ]
   end
 
+  test "여러 도구 호출 인자를 output_index별로 누적한다" do
+    events =
+      [
+        ev(%{"type" => "response.created"}),
+        ev(%{
+          "type" => "response.output_item.added",
+          "output_index" => 0,
+          "item" => %{"type" => "function_call", "call_id" => "call_1", "name" => "read_file"}
+        }),
+        ev(%{
+          "type" => "response.output_item.added",
+          "output_index" => 1,
+          "item" => %{"type" => "function_call", "call_id" => "call_2", "name" => "grep"}
+        }),
+        ev(%{
+          "type" => "response.function_call_arguments.delta",
+          "output_index" => 0,
+          "delta" => "{\"path\":\"README"
+        }),
+        ev(%{
+          "type" => "response.function_call_arguments.delta",
+          "output_index" => 1,
+          "delta" => "{\"pattern\":\"Pado"
+        }),
+        ev(%{
+          "type" => "response.function_call_arguments.delta",
+          "output_index" => 0,
+          "delta" => ".md\"}"
+        }),
+        ev(%{
+          "type" => "response.function_call_arguments.delta",
+          "output_index" => 1,
+          "delta" => "\"}"
+        }),
+        ev(%{"type" => "response.function_call_arguments.done", "output_index" => 0}),
+        ev(%{"type" => "response.function_call_arguments.done", "output_index" => 1}),
+        ev(%{
+          "type" => "response.completed",
+          "response" => %{"status" => "completed", "usage" => %{"total_tokens" => 0}}
+        })
+      ]
+      |> EventMapper.map_stream(@model)
+      |> Enum.to_list()
+
+    assert {:done, done_payload} = List.last(events)
+
+    assert done_payload.message.content == [
+             {:tool_call, %{id: "call_1", name: "read_file", args: %{"path" => "README.md"}}},
+             {:tool_call, %{id: "call_2", name: "grep", args: %{"pattern" => "Pado"}}}
+           ]
+  end
+
   test "reasoning SSE 이벤트를 thinking 블록으로 누적한다" do
     events =
       [
