@@ -1,5 +1,5 @@
 defmodule Pado.Agent.Turn do
-  alias Pado.Agent.{Event, Job}
+  alias Pado.Agent.{Event, Job, Tool}
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
@@ -101,4 +101,37 @@ defmodule Pado.Agent.Turn do
   end
 
   defp finalize_consume(result), do: result
+
+  @doc false
+  @spec tool_calls(Assistant.t()) :: [Message.tool_call()]
+  def tool_calls(%Assistant{content: content}) do
+    Enum.flat_map(content, fn
+      {:tool_call, call} -> [call]
+      _ -> []
+    end)
+  end
+
+  @doc false
+  @spec find_tool([Tool.t()], String.t()) :: Tool.t() | nil
+  def find_tool(tools, name) when is_list(tools) and is_binary(name) do
+    Enum.find(tools, fn %Tool{definition: definition} -> definition.name == name end)
+  end
+
+  @doc false
+  @spec dispatch_tool(Message.tool_call(), [Tool.t()]) :: ToolResult.t()
+  def dispatch_tool(%{id: id, name: name, args: args}, tools) do
+    case find_tool(tools, name) do
+      nil ->
+        ToolResult.error(id, name, "unknown tool: #{name}")
+
+      %Tool{execute: execute} ->
+        try do
+          output = execute.(args, %{})
+          text = if is_binary(output), do: output, else: inspect(output)
+          ToolResult.text(id, name, text)
+        rescue
+          e -> ToolResult.error(id, name, Exception.message(e))
+        end
+    end
+  end
 end

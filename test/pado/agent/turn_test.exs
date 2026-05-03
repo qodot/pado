@@ -1,10 +1,11 @@
 defmodule Pado.Agent.TurnTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent.{Job, Turn}
+  alias Pado.Agent.{Job, Tool, Turn}
   alias Pado.LLM.{Context, Model, Usage}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Credential.OAuth.Credentials
+  alias Pado.LLM.Tool, as: LLMTool
 
   describe "as_llm_messages/1" do
     test "users, assistant, tool_results를 시간순으로 펼친다" do
@@ -284,6 +285,93 @@ defmodule Pado.Agent.TurnTest do
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
       job_id: "j1"
+    }
+  end
+
+  describe "tool_calls/1" do
+    test "content에서 tool_call 블록만 순서대로 추출" do
+      tc1 = %{id: "c1", name: "search", args: %{q: "x"}}
+      tc2 = %{id: "c2", name: "fetch", args: %{u: "y"}}
+
+      assistant = %Assistant{
+        content: [
+          {:text, "자, 다음 작업 할게"},
+          {:tool_call, tc1},
+          {:thinking, "..."},
+          {:tool_call, tc2}
+        ]
+      }
+
+      assert Turn.tool_calls(assistant) == [tc1, tc2]
+    end
+
+    test "tool_call이 없으면 빈 리스트" do
+      assistant = %Assistant{content: [{:text, "그냥 응답"}]}
+      assert Turn.tool_calls(assistant) == []
+    end
+
+    test "빈 content면 빈 리스트" do
+      assert Turn.tool_calls(%Assistant{content: []}) == []
+    end
+  end
+
+  describe "find_tool/2" do
+    test "name이 일치하는 tool을 반환" do
+      a = make_tool("search", fn _, _ -> "a" end)
+      b = make_tool("fetch", fn _, _ -> "b" end)
+
+      assert Turn.find_tool([a, b], "fetch") == b
+    end
+
+    test "일치 없으면 nil" do
+      a = make_tool("search", fn _, _ -> "a" end)
+      assert Turn.find_tool([a], "unknown") == nil
+    end
+
+    test "tools가 비어있으면 nil" do
+      assert Turn.find_tool([], "any") == nil
+    end
+  end
+
+  describe "dispatch_tool/2" do
+    test "unknown tool은 ToolResult.error" do
+      call = %{id: "c1", name: "missing", args: %{}}
+      result = Turn.dispatch_tool(call, [])
+
+      assert %ToolResult{tool_call_id: "c1", tool_name: "missing", is_error: true} = result
+    end
+
+    test "정상 실행 + string 반환은 ToolResult.text" do
+      tools = [make_tool("echo", fn args, _ -> args["text"] end)]
+      call = %{id: "c1", name: "echo", args: %{"text" => "hello"}}
+
+      result = Turn.dispatch_tool(call, tools)
+      assert %ToolResult{is_error: false, content: [{:text, "hello"}]} = result
+    end
+
+    test "non-string 반환은 inspect로 문자열화" do
+      tools = [make_tool("sum", fn args, _ -> args["a"] + args["b"] end)]
+      call = %{id: "c1", name: "sum", args: %{"a" => 1, "b" => 2}}
+
+      result = Turn.dispatch_tool(call, tools)
+      assert %ToolResult{is_error: false, content: [{:text, "3"}]} = result
+    end
+
+    test "실행 중 raise는 ToolResult.error" do
+      tools = [make_tool("boom", fn _, _ -> raise "폭발" end)]
+      call = %{id: "c1", name: "boom", args: %{}}
+
+      result = Turn.dispatch_tool(call, tools)
+      assert %ToolResult{is_error: true} = result
+      assert [{:text, msg}] = result.content
+      assert msg =~ "폭발"
+    end
+  end
+
+  defp make_tool(name, execute) do
+    %Tool{
+      definition: LLMTool.new(name, "테스트 도구", %{}),
+      execute: execute
     }
   end
 
