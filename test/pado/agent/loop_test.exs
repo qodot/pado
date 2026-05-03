@@ -1,9 +1,11 @@
 defmodule Pado.Agent.LoopTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent.{Job, Loop, Turn}
-  alias Pado.LLM.{Context, Model}
+  alias Pado.Agent.{Job, Loop, Tool, Turn}
+  alias Pado.LLM.{Context, Model, Usage}
+  alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}
+  alias Pado.LLM.Tool, as: LLMTool
 
   describe "next_step/1" do
     test "turns가 비어 있으면 :done (방어적 default)" do
@@ -58,6 +60,79 @@ defmodule Pado.Agent.LoopTest do
     end
   end
 
+  describe "run_loop/2" do
+    setup do
+      test_pid = self()
+      emit = fn ev -> send(test_pid, {:emitted, ev}) end
+      creds = Credentials.build(:openai_codex, "a", "r", 3600)
+      Process.put(:fake_creds_response, {:ok, creds})
+      {:ok, emit: emit, creds: creds}
+    end
+
+    test "1턴에 final 응답이면 :done으로 종료", %{emit: emit} do
+      Process.put(:fake_router_response, ok_stream(%Assistant{content: [{:text, "end"}]}))
+
+      job = build_job([])
+      assert {%Job{turns: [_]}, :done, nil} = Loop.run_loop(job, emit)
+
+      assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
+      assert_received {:emitted, {:turn_end, %{turn: %Turn{index: 1}}}}
+    end
+
+    test "1턴 tool_call + 2턴 final 이면 2턴 후 :done", %{emit: emit} do
+      tool = make_tool("echo", fn _, _ -> "r" end)
+
+      asst1 = %Assistant{
+        content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]
+      }
+
+      asst2 = %Assistant{content: [{:text, "final"}]}
+
+      Process.put(:fake_router_responses, [ok_stream(asst1), ok_stream(asst2)])
+
+      job = build_job(tools: [tool])
+      assert {%Job{turns: turns}, :done, nil} = Loop.run_loop(job, emit)
+      assert length(turns) == 2
+
+      assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
+      assert_received {:emitted, {:turn_start, %{turn_index: 2}}}
+    end
+
+    test "max_turns에 도달하면 :max_turns", %{emit: emit} do
+      tool = make_tool("echo", fn _, _ -> "r" end)
+
+      asst = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
+      Process.put(:fake_router_response, ok_stream(asst))
+
+      job = build_job(max_turns: 1, tools: [tool])
+      assert {%Job{turns: [_]}, :max_turns, nil} = Loop.run_loop(job, emit)
+    end
+
+    test "LLM 응답이 :error로 끝나면 :error 상태로 종료 + reason은 error_message", %{emit: emit} do
+      error_msg = %Assistant{stop_reason: :error, error_message: "boom"}
+
+      Process.put(
+        :fake_router_response,
+        {:ok,
+         [
+           {:start, %{message: %Assistant{}}},
+           {:error,
+            %{reason: :error, error_message: "boom", message: error_msg, usage: Usage.empty()}}
+         ]}
+      )
+
+      job = build_job([])
+      assert {%Job{turns: [_]}, :error, "boom"} = Loop.run_loop(job, emit)
+    end
+
+    test "credential 조회 실패는 :error 상태 + reason 그대로, turns는 추가 안 됨", %{emit: emit} do
+      Process.put(:fake_creds_response, {:error, :token_expired})
+
+      job = build_job([])
+      assert {%Job{turns: []}, :error, :token_expired} = Loop.run_loop(job, emit)
+    end
+  end
+
   defp build_job(opts) do
     %Job{
       model: %Model{id: "test", provider: :test},
@@ -73,5 +148,20 @@ defmodule Pado.Agent.LoopTest do
 
   defp with_tool_call do
     %Assistant{content: [{:tool_call, %{id: "c1", name: "any", args: %{}}}]}
+  end
+
+  defp make_tool(name, execute) do
+    %Tool{
+      schema: LLMTool.new(name, "d", %{}),
+      execute: execute
+    }
+  end
+
+  defp ok_stream(final_assistant) do
+    {:ok,
+     [
+       {:start, %{message: %Assistant{}}},
+       {:done, %{stop_reason: :stop, usage: Usage.empty(), message: final_assistant}}
+     ]}
   end
 end

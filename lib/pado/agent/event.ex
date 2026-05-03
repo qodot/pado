@@ -2,7 +2,7 @@ defmodule Pado.Agent.Event do
   alias Pado.Agent.Turn
   alias Pado.LLM
   alias Pado.LLM.Message
-  alias Pado.LLM.Message.{Assistant, ToolResult}
+  alias Pado.LLM.Message.ToolResult
 
   @type job_id :: String.t()
   @type turn_index :: pos_integer()
@@ -39,10 +39,8 @@ defmodule Pado.Agent.Event do
                result: ToolResult.t(),
                is_error: boolean()
              }}
-          | {:error, %{job_id: job_id(), reason: term(), message: Assistant.t() | nil}}
 
   @spec terminal?(t()) :: boolean()
   def terminal?({:job_end, _}), do: true
-  def terminal?({:error, _}), do: true
   def terminal?(_), do: false
 end
