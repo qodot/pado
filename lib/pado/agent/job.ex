@@ -11,6 +11,7 @@ defmodule Pado.Agent.Job do
           session_id: String.t(),
           context: Context.t(),
           tools: [Tool.t()],
+          turns: [Pado.Agent.Turn.t()],
           job_id: String.t() | nil,
           llm_opts: keyword(),
           max_turns: pos_integer()
@@ -23,6 +24,7 @@ defmodule Pado.Agent.Job do
     :session_id,
     :context,
     tools: [],
+    turns: [],
     job_id: nil,
     llm_opts: [],
     max_turns: 10

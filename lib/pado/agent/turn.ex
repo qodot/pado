@@ -24,13 +24,13 @@ defmodule Pado.Agent.Turn do
     users ++ [assistant] ++ tool_results
   end
 
-  @spec take(Job.t(), [t()], emit_fun) ::
-          {:ok, t()} | {:error, t()} | {:error, term()}
-  def take(%Job{} = job, prev_turns, emit) do
-    index = length(prev_turns) + 1
+  @spec take(Job.t(), emit_fun) ::
+          {:ok, Job.t()} | {:error, Job.t()} | {:error, term()}
+  def take(%Job{} = job, emit) do
+    index = length(job.turns) + 1
     users = []
 
-    msgs = job.context.messages ++ Enum.flat_map(prev_turns, &as_llm_messages/1) ++ users
+    msgs = job.context.messages ++ Enum.flat_map(job.turns, &as_llm_messages/1) ++ users
     router_tools = Enum.map(job.tools, & &1.definition)
     ctx = %{job.context | messages: msgs, tools: router_tools}
 
@@ -40,24 +40,26 @@ defmodule Pado.Agent.Turn do
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
       tool_results = dispatch_tools(assistant, job, index, emit)
 
-      {:ok,
-       %__MODULE__{
-         index: index,
-         users: users,
-         assistant: assistant,
-         tool_results: tool_results,
-         usage: assistant.usage
-       }}
+      turn = %__MODULE__{
+        index: index,
+        users: users,
+        assistant: assistant,
+        tool_results: tool_results,
+        usage: assistant.usage
+      }
+
+      {:ok, %{job | turns: job.turns ++ [turn]}}
     else
       {:error, %Assistant{} = assistant} ->
-        {:error,
-         %__MODULE__{
-           index: index,
-           users: users,
-           assistant: assistant,
-           tool_results: [],
-           usage: assistant.usage
-         }}
+        turn = %__MODULE__{
+          index: index,
+          users: users,
+          assistant: assistant,
+          tool_results: [],
+          usage: assistant.usage
+        }
+
+        {:error, %{job | turns: job.turns ++ [turn]}}
 
       {:error, reason} ->
         {:error, reason}
