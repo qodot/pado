@@ -1,7 +1,8 @@
-defmodule Pado.Agent.LoopTest do
+defmodule Pado.AgentTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent.{Job, Loop, Tool, Turn}
+  alias Pado.Agent
+  alias Pado.Agent.{Job, Tool, Turn}
   alias Pado.LLM.{Model, Usage}
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}
@@ -10,7 +11,7 @@ defmodule Pado.Agent.LoopTest do
   describe "next_step/1" do
     test "turns가 비어 있으면 :done (방어적 default)" do
       job = build_job(turns: [])
-      assert Loop.next_step(job) == :done
+      assert Agent.next_step(job) == :done
     end
 
     test "turns 길이가 max_turns에 도달하면 :max_turns" do
@@ -23,7 +24,7 @@ defmodule Pado.Agent.LoopTest do
           ]
         )
 
-      assert Loop.next_step(job) == :max_turns
+      assert Agent.next_step(job) == :max_turns
     end
 
     test "turns 길이가 max_turns를 초과해도 :max_turns" do
@@ -36,7 +37,7 @@ defmodule Pado.Agent.LoopTest do
           ]
         )
 
-      assert Loop.next_step(job) == :max_turns
+      assert Agent.next_step(job) == :max_turns
     end
 
     test "마지막 turn에 tool_call이 있고 max_turns 안 도달이면 :continue" do
@@ -46,7 +47,7 @@ defmodule Pado.Agent.LoopTest do
           turns: [%Turn{index: 1, assistant: with_tool_call()}]
         )
 
-      assert Loop.next_step(job) == :continue
+      assert Agent.next_step(job) == :continue
     end
 
     test "마지막 turn에 tool_call이 없고 max_turns 안 도달이면 :done" do
@@ -56,11 +57,11 @@ defmodule Pado.Agent.LoopTest do
           turns: [%Turn{index: 1, assistant: %Assistant{content: [{:text, "끝"}]}}]
         )
 
-      assert Loop.next_step(job) == :done
+      assert Agent.next_step(job) == :done
     end
   end
 
-  describe "stream/1" do
+  describe "loop/1" do
     setup do
       test_pid = self()
 
@@ -74,7 +75,7 @@ defmodule Pado.Agent.LoopTest do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       job = build_job([])
-      events = Loop.stream(job) |> Enum.to_list()
+      events = Agent.loop(job) |> Enum.to_list()
 
       assert {:job_start, %{job_id: "j1"}} = hd(events)
 
@@ -89,7 +90,7 @@ defmodule Pado.Agent.LoopTest do
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
       job = build_job(tools: [tool])
-      events = Loop.stream(job) |> Enum.to_list()
+      events = Agent.loop(job) |> Enum.to_list()
 
       turn_starts = Enum.filter(events, &match?({:turn_start, _}, &1))
       assert length(turn_starts) == 2
@@ -113,7 +114,7 @@ defmodule Pado.Agent.LoopTest do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       job = build_job([])
-      assert {%Job{turns: [_]}, :done, nil} = Loop.run_loop(job, emit)
+      assert {%Job{turns: [_]}, :done, nil} = Agent.run_loop(job, emit)
 
       assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
       assert_received {:emitted, {:turn_end, %{turn: %Turn{index: 1}}}}
@@ -131,7 +132,7 @@ defmodule Pado.Agent.LoopTest do
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
       job = build_job(tools: [tool])
-      assert {%Job{turns: turns}, :done, nil} = Loop.run_loop(job, emit)
+      assert {%Job{turns: turns}, :done, nil} = Agent.run_loop(job, emit)
       assert length(turns) == 2
 
       assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
@@ -145,7 +146,7 @@ defmodule Pado.Agent.LoopTest do
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
 
       job = build_job(max_turns: 1, tools: [tool])
-      assert {%Job{turns: [_]}, :max_turns, nil} = Loop.run_loop(job, emit)
+      assert {%Job{turns: [_]}, :max_turns, nil} = Agent.run_loop(job, emit)
     end
 
     test "LLM 응답이 :error로 끝나면 :error 상태로 종료 + reason은 error_message", %{emit: emit} do
@@ -161,7 +162,7 @@ defmodule Pado.Agent.LoopTest do
       )
 
       job = build_job([])
-      assert {%Job{turns: [_]}, :error, "boom"} = Loop.run_loop(job, emit)
+      assert {%Job{turns: [_]}, :error, "boom"} = Agent.run_loop(job, emit)
     end
   end
 
