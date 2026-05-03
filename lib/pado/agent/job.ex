@@ -13,8 +13,7 @@ defmodule Pado.Agent.Job do
           tools: [Tool.t()],
           job_id: String.t() | nil,
           llm_opts: keyword(),
-          max_turns: pos_integer(),
-          router: module()
+          max_turns: pos_integer()
         }
 
   @enforce_keys [:model, :credential_fun, :session_id, :context]
@@ -26,7 +25,6 @@ defmodule Pado.Agent.Job do
     tools: [],
     job_id: nil,
     llm_opts: [],
-    max_turns: 10,
-    router: Pado.LLMRouter
+    max_turns: 10
   ]
 end

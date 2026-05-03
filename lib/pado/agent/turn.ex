@@ -4,6 +4,8 @@ defmodule Pado.Agent.Turn do
   alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
   alias Pado.LLMRouter.Usage
 
+  @router Application.compile_env(:pado, :router, Pado.LLMRouter)
+
   @type t :: %__MODULE__{
           index: pos_integer(),
           users: [User.t()],
@@ -33,7 +35,7 @@ defmodule Pado.Agent.Turn do
 
     with {:ok, creds} <- job.credential_fun.(),
          {:ok, stream} <-
-           job.router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
+           @router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
       {:ok,
        %__MODULE__{

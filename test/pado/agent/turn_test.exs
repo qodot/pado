@@ -283,8 +283,7 @@ defmodule Pado.Agent.TurnTest do
       credential_fun: Keyword.get(opts, :credential_fun, fn -> {:ok, creds} end),
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
-      job_id: "j1",
-      router: Pado.Test.FakeLLMRouter
+      job_id: "j1"
     }
   end
 
