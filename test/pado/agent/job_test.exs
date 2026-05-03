@@ -3,7 +3,6 @@ defmodule Pado.Agent.JobTest do
 
   alias Pado.Agent.{Job, Turn}
   alias Pado.LLM.{Context, Model}
-  alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   describe "llm_context/1" do
@@ -97,11 +96,9 @@ defmodule Pado.Agent.JobTest do
   end
 
   defp build_job(opts \\ []) do
-    creds = Credentials.build(:openai_codex, "a", "r", 3600)
-
     %Job{
       model: %Model{id: "test", provider: :test},
-      credential_fun: fn -> {:ok, creds} end,
+      credential_provider: :test_provider,
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("base")])),
       job_id: "j1"

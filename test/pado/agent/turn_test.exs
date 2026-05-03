@@ -163,6 +163,7 @@ defmodule Pado.Agent.TurnTest do
       test_pid = self()
       emit = fn ev -> send(test_pid, {:emitted, ev}) end
       creds = Credentials.build(:openai_codex, "access", "refresh", 3600)
+      Process.put(:fake_creds_response, {:ok, creds})
       {:ok, emit: emit, creds: creds}
     end
 
@@ -268,9 +269,18 @@ defmodule Pado.Agent.TurnTest do
                        }}
     end
 
-    test "credential_fun 실패면 {:error, reason}", %{emit: emit} do
-      job = build_job(nil, credential_fun: fn -> {:error, :token_expired} end)
+    test "Credential.load 실패면 {:error, reason}", %{emit: emit, creds: creds} do
+      Process.put(:fake_creds_response, {:error, :token_expired})
+      job = build_job(creds)
       assert {:error, :token_expired} = Turn.take(job, emit)
+    end
+
+    test "credential_provider가 config에 없으면 {:error, {:unconfigured_provider, _}}", %{
+      emit: emit,
+      creds: creds
+    } do
+      job = build_job(creds, credential_provider: :nope)
+      assert {:error, {:unconfigured_provider, :nope}} = Turn.take(job, emit)
     end
 
     test "router.stream이 {:error, _} 반환하면 {:error, reason}", %{emit: emit, creds: creds} do
@@ -379,10 +389,10 @@ defmodule Pado.Agent.TurnTest do
     end
   end
 
-  defp build_job(creds, opts \\ []) do
+  defp build_job(_creds, opts \\ []) do
     %Job{
       model: %Model{id: "test", provider: :test},
-      credential_fun: Keyword.get(opts, :credential_fun, fn -> {:ok, creds} end),
+      credential_provider: Keyword.get(opts, :credential_provider, :test_provider),
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
       tools: Keyword.get(opts, :tools, []),

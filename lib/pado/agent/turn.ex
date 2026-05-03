@@ -1,5 +1,6 @@
 defmodule Pado.Agent.Turn do
   alias Pado.Agent.{Event, Job, Tool}
+  alias Pado.LLM.Credential
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
@@ -30,7 +31,7 @@ defmodule Pado.Agent.Turn do
     index = length(job.turns) + 1
     users = []
 
-    with {:ok, creds} <- job.credential_fun.(),
+    with {:ok, creds} <- Credential.load(job.credential_provider),
          {:ok, stream} <-
            @router.stream(job.model, Job.llm_context(job), creds, job.session_id, job.llm_opts),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
