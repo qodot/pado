@@ -4,10 +4,10 @@ defmodule Pado.LLM.Credential do
   @type provider :: atom()
   @type loader_mapping :: {module(), term()}
 
-  @spec fetch(provider) :: {:ok, Credentials.t()} | {:error, term()}
-  def fetch(provider) when is_atom(provider) do
+  @spec load(provider) :: {:ok, Credentials.t()} | {:error, term()}
+  def load(provider) when is_atom(provider) do
     with {:ok, {loader, arg}} <- lookup(provider) do
-      loader.fetch(arg)
+      loader.load(arg)
     end
   end
 

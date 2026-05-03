@@ -21,14 +21,14 @@ defmodule Pado.LLM.CredentialTest do
     {:ok, path: path}
   end
 
-  describe "save/2 + fetch/1" do
+  describe "save/2 + load/1" do
     test "config map의 loader로 dispatch해서 round-trip한다", %{path: path} do
       creds = Credentials.build(:openai_codex, "a", "r", 3600, %{"account_id" => "acc1"})
 
       assert :ok = Credential.save(:test_openai, creds)
       assert File.exists?(path)
 
-      assert {:ok, loaded} = Credential.fetch(:test_openai)
+      assert {:ok, loaded} = Credential.load(:test_openai)
       assert loaded.access == "a"
       assert loaded.refresh == "r"
       assert loaded.extra == %{"account_id" => "acc1"}
@@ -36,8 +36,8 @@ defmodule Pado.LLM.CredentialTest do
   end
 
   describe "config에 없는 provider" do
-    test "fetch는 {:error, {:unconfigured_provider, _}}" do
-      assert {:error, {:unconfigured_provider, :unknown}} = Credential.fetch(:unknown)
+    test "load는 {:error, {:unconfigured_provider, _}}" do
+      assert {:error, {:unconfigured_provider, :unknown}} = Credential.load(:unknown)
     end
 
     test "save는 {:error, {:unconfigured_provider, _}}" do

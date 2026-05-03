@@ -119,7 +119,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
   책임이다. Pi가 `pi-coding-agent`의 `AuthStorage`에 그 책임을 분리해 둔 것과
   같은 원칙. 흔한 JSON 파일 저장소는 `Pado.LLM.Credential.FileLoader`에
   helper로 격리되어 있고, 호출자가 config에 매핑만 선언하면 자동 저장/조회된다.
-  DB/Vault/KMS 같은 다른 저장소는 호출자가 같은 인터페이스(`fetch/1`, `save/2`)를
+  DB/Vault/KMS 같은 다른 저장소는 호출자가 같은 인터페이스(`load/1`, `save/2`)를
   가진 모듈을 만들어 매핑에 등록하면 된다.
 - **콜백 서버는 라이브러리 안에 내장**되어 있다. OpenAI의 `redirect_uri`가
   `http://localhost:1455/auth/callback`으로 서버에 등록되어 있어 우회할 수 없는
@@ -147,7 +147,7 @@ config :pado, credentials: %{
 }
 ```
 
-매핑 값 `{Module, arg}`는 `Module.fetch(arg)` / `Module.save(creds, arg)`로
+매핑 값 `{Module, arg}`는 `Module.load(arg)` / `Module.save(creds, arg)`로
 디스패치된다. JSON 파일 외의 저장소를 쓰려면 같은 인터페이스를 가진 모듈을
 호출자가 만들어 매핑에 올리면 된다.
 
@@ -182,7 +182,7 @@ alias Pado.LLM.Credential
 alias Pado.LLM.Message.User
 
 # config 매핑을 통해 자동으로 stale 체크 + refresh + 재저장까지 처리한다.
-{:ok, creds} = Credential.fetch(:openai_codex)
+{:ok, creds} = Credential.load(:openai_codex)
 
 model = OpenAICodexCatalog.default()
 ctx = Context.new(messages: [User.new("안녕. 한 문장으로 자기소개해줘.")])
@@ -202,7 +202,7 @@ end)
 ```
 
 > 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).
-> `Credential.fetch/1` 안에서 `FileLoader`가 자동으로 재저장해주므로 따로
+> `Credential.load/1` 안에서 `FileLoader`가 자동으로 재저장해주므로 따로
 > 신경쓸 필요는 없다. 직접 HTTP 헤더를 조립해야 하는 특수한 경우에는
 > `Pado.LLM.Credential.OAuth.OpenAICodex.api_key/1`로 bearer 토큰을 꺼낼 수 있다.
 

@@ -1,7 +1,7 @@
 defmodule Pado.LLM.Credential.FileLoader do
   alias Pado.LLM.Credential.OAuth.{Credentials, OpenAICodex}
 
-  def fetch(path) when is_binary(path) do
+  def load(path) when is_binary(path) do
     with {:ok, json} <- File.read(path),
          {:ok, decoded} <- Jason.decode(json),
          {:ok, creds} <- Credentials.from_map(decoded) do

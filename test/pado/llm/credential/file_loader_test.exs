@@ -28,14 +28,14 @@ defmodule Pado.LLM.Credential.FileLoaderTest do
     end
   end
 
-  describe "fetch/1" do
+  describe "load/1" do
     test "저장된 credentials를 읽어 반환한다", %{path: path} do
       creds =
         Credentials.build(:openai_codex, "access", "refresh", 3600, %{"account_id" => "acc1"})
 
       :ok = FileLoader.save(creds, path)
 
-      assert {:ok, loaded} = FileLoader.fetch(path)
+      assert {:ok, loaded} = FileLoader.load(path)
       assert loaded.access == creds.access
       assert loaded.refresh == creds.refresh
       assert loaded.provider == creds.provider
@@ -43,12 +43,12 @@ defmodule Pado.LLM.Credential.FileLoaderTest do
     end
 
     test "파일이 없으면 {:error, :enoent}", %{path: path} do
-      assert {:error, :enoent} = FileLoader.fetch(path)
+      assert {:error, :enoent} = FileLoader.load(path)
     end
 
     test "JSON이 깨졌으면 {:error, _}", %{path: path} do
       File.write!(path, "not a json")
-      assert {:error, _} = FileLoader.fetch(path)
+      assert {:error, _} = FileLoader.load(path)
     end
 
     test "지원되지 않는 provider면 refresh 시 {:error, {:unsupported_provider, _}}", %{path: path} do
@@ -63,7 +63,7 @@ defmodule Pado.LLM.Credential.FileLoaderTest do
 
       :ok = FileLoader.save(stale_creds, path)
 
-      assert {:error, {:unsupported_provider, :unknown_provider}} = FileLoader.fetch(path)
+      assert {:error, {:unsupported_provider, :unknown_provider}} = FileLoader.load(path)
     end
   end
 end
