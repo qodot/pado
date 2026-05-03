@@ -2,15 +2,14 @@ defmodule Pado.Agent do
   alias Pado.Agent.{Event, Harness, Job, LLM, Turn}
   alias Pado.LLM.Context, as: LLMContext
 
+  @type emit_fun :: (Event.t() -> any())
+
   @type t :: %__MODULE__{
           name: String.t() | nil,
           description: String.t() | nil,
           llm: LLM.t(),
           harness: Harness.t()
         }
-
-  @type emit_fun :: (Event.t() -> any())
-  @type next_decision :: :continue | :done | :max_turns
 
   @enforce_keys [:llm, :harness]
   defstruct [
@@ -81,19 +80,6 @@ defmodule Pado.Agent do
   end
 
   @doc false
-  @spec next_step(Job.t()) :: next_decision()
-  def next_step(%Job{turns: turns, max_turns: max}) do
-    cond do
-      length(turns) >= max -> :max_turns
-      has_tool_calls?(List.last(turns)) -> :continue
-      true -> :done
-    end
-  end
-
-  defp has_tool_calls?(nil), do: false
-  defp has_tool_calls?(%Turn{assistant: assistant}), do: Turn.tool_calls(assistant) != []
-
-  @doc false
   @spec run_loop(t(), Job.t(), emit_fun) :: {Job.t(), Event.status(), term() | nil}
   def run_loop(%__MODULE__{} = agent, %Job{} = job, emit) do
     index = length(job.turns) + 1
@@ -103,7 +89,7 @@ defmodule Pado.Agent do
       {:ok, job} ->
         emit.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
 
-        case next_step(job) do
+        case Job.next_step(job) do
           :continue -> run_loop(agent, job, emit)
           status -> {job, status, nil}
         end

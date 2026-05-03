@@ -8,59 +8,6 @@ defmodule Pado.AgentTest do
   alias Pado.LLM.Message.{Assistant, User}
   alias Pado.LLM.Tool, as: LLMTool
 
-  describe "next_step/1" do
-    test "turns가 비어 있으면 :done (방어적 default)" do
-      {_agent, job} = build_setup(turns: [])
-      assert Agent.next_step(job) == :done
-    end
-
-    test "turns 길이가 max_turns에 도달하면 :max_turns" do
-      {_agent, job} =
-        build_setup(
-          max_turns: 2,
-          turns: [
-            %Turn{index: 1, assistant: with_tool_call()},
-            %Turn{index: 2, assistant: with_tool_call()}
-          ]
-        )
-
-      assert Agent.next_step(job) == :max_turns
-    end
-
-    test "turns 길이가 max_turns를 초과해도 :max_turns" do
-      {_agent, job} =
-        build_setup(
-          max_turns: 1,
-          turns: [
-            %Turn{index: 1, assistant: with_tool_call()},
-            %Turn{index: 2, assistant: with_tool_call()}
-          ]
-        )
-
-      assert Agent.next_step(job) == :max_turns
-    end
-
-    test "마지막 turn에 tool_call이 있고 max_turns 안 도달이면 :continue" do
-      {_agent, job} =
-        build_setup(
-          max_turns: 5,
-          turns: [%Turn{index: 1, assistant: with_tool_call()}]
-        )
-
-      assert Agent.next_step(job) == :continue
-    end
-
-    test "마지막 turn에 tool_call이 없고 max_turns 안 도달이면 :done" do
-      {_agent, job} =
-        build_setup(
-          max_turns: 5,
-          turns: [%Turn{index: 1, assistant: %Assistant{content: [{:text, "끝"}]}}]
-        )
-
-      assert Agent.next_step(job) == :done
-    end
-  end
-
   describe "loop/2" do
     setup do
       test_pid = self()
@@ -183,10 +130,6 @@ defmodule Pado.AgentTest do
     }
 
     {agent, job}
-  end
-
-  defp with_tool_call do
-    %Assistant{content: [{:tool_call, %{id: "c1", name: "any", args: %{}}}]}
   end
 
   defp make_tool(name, execute) do
