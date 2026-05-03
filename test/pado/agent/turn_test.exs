@@ -1,6 +1,7 @@
 defmodule Pado.Agent.TurnTest do
   use ExUnit.Case, async: true
 
+  alias Pado.Agent
   alias Pado.Agent.{Job, Tool, Turn}
   alias Pado.LLM.{Context, Model, Usage}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
@@ -172,9 +173,9 @@ defmodule Pado.Agent.TurnTest do
 
     test "새 turn이 job.turns 끝에 추가된 갱신된 Job을 반환한다", %{emit: emit, creds: creds} do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
-      job = build_job(creds)
+      {agent, job} = build_setup(creds)
 
-      assert {:ok, %Job{turns: turns}} = Turn.take(job, emit)
+      assert {:ok, %Job{turns: turns}} = Turn.take(agent, job, emit)
       assert [%Turn{index: 1, users: [], tool_results: []}] = turns
     end
 
@@ -186,8 +187,9 @@ defmodule Pado.Agent.TurnTest do
         %Turn{index: 2, assistant: %Assistant{}}
       ]
 
-      job = %{build_job(creds) | turns: prev}
-      assert {:ok, %Job{turns: turns}} = Turn.take(job, emit)
+      {agent, job} = build_setup(creds)
+      job = %{job | turns: prev}
+      assert {:ok, %Job{turns: turns}} = Turn.take(agent, job, emit)
       assert [_, _, %Turn{index: 3}] = turns
     end
 
@@ -196,11 +198,11 @@ defmodule Pado.Agent.TurnTest do
       final = %Assistant{usage: usage}
       Pado.Test.FakeLLM.put_response(ok_stream(final))
 
-      job = build_job(creds)
-      assert {:ok, %Job{turns: [%Turn{usage: ^usage}]}} = Turn.take(job, emit)
+      {agent, job} = build_setup(creds)
+      assert {:ok, %Job{turns: [%Turn{usage: ^usage}]}} = Turn.take(agent, job, emit)
     end
 
-    test "router.stream에 job.tools의 schema 목록이 ctx.tools로 전달된다", %{
+    test "router.stream에 agent.harness.tools의 schema 목록이 ctx.tools로 전달된다", %{
       emit: emit,
       creds: creds
     } do
@@ -208,22 +210,22 @@ defmodule Pado.Agent.TurnTest do
 
       tool_a = make_tool("search", fn _, _ -> "a" end)
       tool_b = make_tool("fetch", fn _, _ -> "b" end)
-      job = build_job(creds, tools: [tool_a, tool_b])
-      Turn.take(job, emit)
+      {agent, job} = build_setup(creds, tools: [tool_a, tool_b])
+      Turn.take(agent, job, emit)
 
       expected = [tool_a.schema, tool_b.schema]
       assert_received {:fake_router_called, %{ctx: %Context{tools: ^expected}}}
     end
 
-    test "첫 Turn에 router.stream에 base context messages가 그대로 전달된다", %{
+    test "첫 Turn에 router.stream에 base messages가 그대로 전달된다", %{
       emit: emit,
       creds: creds
     } do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       base_msgs = [User.new("first")]
-      job = build_job(creds, messages: base_msgs)
-      Turn.take(job, emit)
+      {agent, job} = build_setup(creds, messages: base_msgs)
+      Turn.take(agent, job, emit)
 
       assert_received {:fake_router_called, %{ctx: %Context{messages: ^base_msgs}}}
     end
@@ -243,9 +245,10 @@ defmodule Pado.Agent.TurnTest do
         tool_results: []
       }
 
-      job = %{build_job(creds, messages: base_msgs) | turns: [prev_turn]}
+      {agent, job} = build_setup(creds, messages: base_msgs)
+      job = %{job | turns: [prev_turn]}
 
-      Turn.take(job, emit)
+      Turn.take(agent, job, emit)
 
       expected = base_msgs ++ Turn.as_llm_messages(prev_turn)
       assert_received {:fake_router_called, %{ctx: %Context{messages: ^expected}}}
@@ -257,8 +260,8 @@ defmodule Pado.Agent.TurnTest do
     } do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
-      job = build_job(creds, llm_opts: [reasoning_effort: :low])
-      Turn.take(job, emit)
+      {agent, job} = build_setup(creds, llm_opts: [reasoning_effort: :low])
+      Turn.take(agent, job, emit)
 
       assert_received {:fake_router_called,
                        %{
@@ -271,8 +274,8 @@ defmodule Pado.Agent.TurnTest do
 
     test "router.stream이 {:error, _} 반환하면 {:error, reason}", %{emit: emit, creds: creds} do
       Pado.Test.FakeLLM.put_response({:error, :network})
-      job = build_job(creds)
-      assert {:error, :network} = Turn.take(job, emit)
+      {agent, job} = build_setup(creds)
+      assert {:error, :network} = Turn.take(agent, job, emit)
     end
 
     test "assistant가 tool_call을 요청하면 새 turn.tool_results에 순서대로 들어간다",
@@ -288,9 +291,11 @@ defmodule Pado.Agent.TurnTest do
       }
 
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
-      job = build_job(creds, tools: [tool])
+      {agent, job} = build_setup(creds, tools: [tool])
 
-      assert {:ok, %Job{turns: [%Turn{tool_results: [tr1, tr2]}]}} = Turn.take(job, emit)
+      assert {:ok, %Job{turns: [%Turn{tool_results: [tr1, tr2]}]}} =
+               Turn.take(agent, job, emit)
+
       assert tr1.tool_call_id == "c1"
       assert tr1.content == [{:text, "hi"}]
       assert tr2.tool_call_id == "c2"
@@ -303,9 +308,9 @@ defmodule Pado.Agent.TurnTest do
       }
 
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
-      job = build_job(creds, tools: [])
+      {agent, job} = build_setup(creds, tools: [])
 
-      assert {:ok, %Job{turns: [%Turn{tool_results: [tr]}]}} = Turn.take(job, emit)
+      assert {:ok, %Job{turns: [%Turn{tool_results: [tr]}]}} = Turn.take(agent, job, emit)
       assert tr.is_error == true
     end
 
@@ -320,8 +325,8 @@ defmodule Pado.Agent.TurnTest do
       }
 
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
-      job = build_job(creds, tools: [tool])
-      Turn.take(job, emit)
+      {agent, job} = build_setup(creds, tools: [tool])
+      Turn.take(agent, job, emit)
 
       assert_received {:emitted,
                        {:tool_execution_start,
@@ -349,9 +354,9 @@ defmodule Pado.Agent.TurnTest do
       creds: creds
     } do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "끝"}]}))
-      job = build_job(creds, tools: [make_tool("echo", fn _, _ -> "x" end)])
+      {agent, job} = build_setup(creds, tools: [make_tool("echo", fn _, _ -> "x" end)])
 
-      assert {:ok, %Job{turns: [%Turn{tool_results: []}]}} = Turn.take(job, emit)
+      assert {:ok, %Job{turns: [%Turn{tool_results: []}]}} = Turn.take(agent, job, emit)
     end
 
     test "LLM 응답이 :error로 끝나면 {:error, %Job{...}}을 반환 (마지막 turn은 error turn)",
@@ -367,15 +372,15 @@ defmodule Pado.Agent.TurnTest do
          ]}
       )
 
-      job = build_job(creds)
+      {agent, job} = build_setup(creds)
 
       assert {:error, %Job{turns: [%Turn{index: 1, assistant: ^error_msg}]}} =
-               Turn.take(job, emit)
+               Turn.take(agent, job, emit)
     end
   end
 
-  defp build_job(creds, opts \\ []) do
-    agent = %Pado.Agent{
+  defp build_setup(creds, opts \\ []) do
+    agent = %Agent{
       llm: %Pado.Agent.LLM{
         provider: :openai_codex,
         credentials: creds,
@@ -388,12 +393,13 @@ defmodule Pado.Agent.TurnTest do
       max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
-    %Job{
-      agent: agent,
+    job = %Job{
       messages: Keyword.get(opts, :messages, [User.new("hi")]),
       session_id: "s1",
       job_id: "j1"
     }
+
+    {agent, job}
   end
 
   describe "tool_calls/1" do

@@ -1,4 +1,5 @@
 defmodule Pado.Agent.Turn do
+  alias Pado.Agent
   alias Pado.Agent.{Event, Job, Tool}
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
@@ -22,24 +23,24 @@ defmodule Pado.Agent.Turn do
     users ++ [assistant] ++ tool_results
   end
 
-  @spec take(Job.t(), emit_fun) ::
+  @spec take(Agent.t(), Job.t(), emit_fun) ::
           {:ok, Job.t()} | {:error, Job.t()} | {:error, term()}
-  def take(%Job{} = job, emit) do
+  def take(%Agent{} = agent, %Job{} = job, emit) do
     index = length(job.turns) + 1
     users = []
 
-    llm = job.agent.llm
+    llm = agent.llm
 
     with {:ok, stream} <-
            llm.router.stream(
              llm.model,
-             Job.llm_context(job),
+             Agent.llm_context(agent, job),
              llm.credentials,
              job.session_id,
              llm.opts
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
-      tool_results = dispatch_tools(assistant, job, index, emit)
+      tool_results = dispatch_tools(agent, job, assistant, index, emit)
 
       turn = %__MODULE__{
         index: index,
@@ -108,7 +109,7 @@ defmodule Pado.Agent.Turn do
 
   defp finalize_consume(result), do: result
 
-  defp dispatch_tools(%Assistant{} = assistant, %Job{} = job, index, emit) do
+  defp dispatch_tools(%Agent{} = agent, %Job{} = job, %Assistant{} = assistant, index, emit) do
     assistant
     |> tool_calls()
     |> Enum.map(fn call ->
@@ -123,7 +124,7 @@ defmodule Pado.Agent.Turn do
          }}
       )
 
-      result = dispatch_tool(call, job.agent.harness.tools)
+      result = dispatch_tool(call, agent.harness.tools)
 
       emit.(
         {:tool_execution_end,

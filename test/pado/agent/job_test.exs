@@ -2,57 +2,7 @@ defmodule Pado.Agent.JobTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.{Job, Turn}
-  alias Pado.LLM.Model
-  alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
-
-  describe "llm_context/1" do
-    test "agent.system_prompt가 ctx.system_prompt에 들어간다" do
-      job = build_job(system_prompt: "sys")
-      assert Job.llm_context(job).system_prompt == "sys"
-    end
-
-    test "messages와 tools도 함께 채워진다" do
-      tool = %Pado.Agent.Tool{
-        schema: Pado.LLM.Tool.new("search", "d", %{}),
-        execute: fn _, _ -> "" end
-      }
-
-      asst = %Assistant{content: [{:text, "a"}]}
-      base_msgs = [User.new("first")]
-
-      job = %{
-        build_job(messages: base_msgs, tools: [tool])
-        | turns: [%Turn{index: 1, assistant: asst}]
-      }
-
-      ctx = Job.llm_context(job)
-      assert ctx.messages == base_msgs ++ [asst]
-      assert ctx.tools == [tool.schema]
-    end
-  end
-
-  describe "llm_tools/1" do
-    test "job.tools에서 schema만 순서대로 추출" do
-      tool_a = %Pado.Agent.Tool{
-        schema: Pado.LLM.Tool.new("search", "d", %{}),
-        execute: fn _, _ -> "a" end
-      }
-
-      tool_b = %Pado.Agent.Tool{
-        schema: Pado.LLM.Tool.new("fetch", "d", %{}),
-        execute: fn _, _ -> "b" end
-      }
-
-      job = build_job(tools: [tool_a, tool_b])
-      assert Job.llm_tools(job) == [tool_a.schema, tool_b.schema]
-    end
-
-    test "tools가 비어 있으면 빈 리스트" do
-      job = build_job()
-      assert Job.llm_tools(job) == []
-    end
-  end
 
   describe "llm_messages/1" do
     test "turns가 비어 있으면 job.messages 그대로" do
@@ -96,20 +46,7 @@ defmodule Pado.Agent.JobTest do
   end
 
   defp build_job(opts \\ []) do
-    agent = %Pado.Agent{
-      llm: %Pado.Agent.LLM{
-        provider: :openai_codex,
-        credentials: Credentials.build(:openai_codex, "a", "r", 3600),
-        model: %Model{id: "test", provider: :test}
-      },
-      harness: %Pado.Agent.Harness{
-        tools: Keyword.get(opts, :tools, []),
-        system_prompt: Keyword.get(opts, :system_prompt)
-      }
-    }
-
     %Job{
-      agent: agent,
       messages: Keyword.get(opts, :messages, [User.new("base")]),
       session_id: "s1",
       job_id: "j1"

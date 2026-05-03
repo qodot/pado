@@ -8,15 +8,15 @@ defmodule Pado.AgentTest do
   alias Pado.LLM.Message.{Assistant, User}
   alias Pado.LLM.Tool, as: LLMTool
 
-  describe "next_step/1" do
+  describe "next_step/2" do
     test "turns가 비어 있으면 :done (방어적 default)" do
-      job = build_job(turns: [])
-      assert Agent.next_step(job) == :done
+      {agent, job} = build_setup(turns: [])
+      assert Agent.next_step(agent, job) == :done
     end
 
     test "turns 길이가 max_turns에 도달하면 :max_turns" do
-      job =
-        build_job(
+      {agent, job} =
+        build_setup(
           max_turns: 2,
           turns: [
             %Turn{index: 1, assistant: with_tool_call()},
@@ -24,12 +24,12 @@ defmodule Pado.AgentTest do
           ]
         )
 
-      assert Agent.next_step(job) == :max_turns
+      assert Agent.next_step(agent, job) == :max_turns
     end
 
     test "turns 길이가 max_turns를 초과해도 :max_turns" do
-      job =
-        build_job(
+      {agent, job} =
+        build_setup(
           max_turns: 1,
           turns: [
             %Turn{index: 1, assistant: with_tool_call()},
@@ -37,31 +37,31 @@ defmodule Pado.AgentTest do
           ]
         )
 
-      assert Agent.next_step(job) == :max_turns
+      assert Agent.next_step(agent, job) == :max_turns
     end
 
     test "마지막 turn에 tool_call이 있고 max_turns 안 도달이면 :continue" do
-      job =
-        build_job(
+      {agent, job} =
+        build_setup(
           max_turns: 5,
           turns: [%Turn{index: 1, assistant: with_tool_call()}]
         )
 
-      assert Agent.next_step(job) == :continue
+      assert Agent.next_step(agent, job) == :continue
     end
 
     test "마지막 turn에 tool_call이 없고 max_turns 안 도달이면 :done" do
-      job =
-        build_job(
+      {agent, job} =
+        build_setup(
           max_turns: 5,
           turns: [%Turn{index: 1, assistant: %Assistant{content: [{:text, "끝"}]}}]
         )
 
-      assert Agent.next_step(job) == :done
+      assert Agent.next_step(agent, job) == :done
     end
   end
 
-  describe "loop/1" do
+  describe "loop/2" do
     setup do
       test_pid = self()
 
@@ -74,11 +74,10 @@ defmodule Pado.AgentTest do
     test "1턴 정상 응답 → :job_start로 시작해서 :job_end status :done으로 종료" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
-      job = build_job([])
-      events = Agent.loop(job) |> Enum.to_list()
+      {agent, job} = build_setup([])
+      events = Agent.loop(agent, job) |> Enum.to_list()
 
       assert {:job_start, %{job_id: "j1"}} = hd(events)
-
       assert {:job_end, %{status: :done, reason: nil, turns: [_]}} = List.last(events)
     end
 
@@ -89,8 +88,8 @@ defmodule Pado.AgentTest do
       asst2 = %Assistant{content: [{:text, "final"}]}
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
-      job = build_job(tools: [tool])
-      events = Agent.loop(job) |> Enum.to_list()
+      {agent, job} = build_setup(tools: [tool])
+      events = Agent.loop(agent, job) |> Enum.to_list()
 
       turn_starts = Enum.filter(events, &match?({:turn_start, _}, &1))
       assert length(turn_starts) == 2
@@ -99,7 +98,7 @@ defmodule Pado.AgentTest do
     end
   end
 
-  describe "run_loop/2" do
+  describe "run_loop/3" do
     setup do
       test_pid = self()
       emit = fn ev -> send(test_pid, {:emitted, ev}) end
@@ -113,8 +112,8 @@ defmodule Pado.AgentTest do
     test "1턴에 final 응답이면 :done으로 종료", %{emit: emit} do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
-      job = build_job([])
-      assert {%Job{turns: [_]}, :done, nil} = Agent.run_loop(job, emit)
+      {agent, job} = build_setup([])
+      assert {%Job{turns: [_]}, :done, nil} = Agent.run_loop(agent, job, emit)
 
       assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
       assert_received {:emitted, {:turn_end, %{turn: %Turn{index: 1}}}}
@@ -123,16 +122,13 @@ defmodule Pado.AgentTest do
     test "1턴 tool_call + 2턴 final 이면 2턴 후 :done", %{emit: emit} do
       tool = make_tool("echo", fn _, _ -> "r" end)
 
-      asst1 = %Assistant{
-        content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]
-      }
-
+      asst1 = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
       asst2 = %Assistant{content: [{:text, "final"}]}
 
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
-      job = build_job(tools: [tool])
-      assert {%Job{turns: turns}, :done, nil} = Agent.run_loop(job, emit)
+      {agent, job} = build_setup(tools: [tool])
+      assert {%Job{turns: turns}, :done, nil} = Agent.run_loop(agent, job, emit)
       assert length(turns) == 2
 
       assert_received {:emitted, {:turn_start, %{turn_index: 1}}}
@@ -145,8 +141,8 @@ defmodule Pado.AgentTest do
       asst = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
 
-      job = build_job(max_turns: 1, tools: [tool])
-      assert {%Job{turns: [_]}, :max_turns, nil} = Agent.run_loop(job, emit)
+      {agent, job} = build_setup(max_turns: 1, tools: [tool])
+      assert {%Job{turns: [_]}, :max_turns, nil} = Agent.run_loop(agent, job, emit)
     end
 
     test "LLM 응답이 :error로 끝나면 :error 상태로 종료 + reason은 error_message", %{emit: emit} do
@@ -161,13 +157,13 @@ defmodule Pado.AgentTest do
          ]}
       )
 
-      job = build_job([])
-      assert {%Job{turns: [_]}, :error, "boom"} = Agent.run_loop(job, emit)
+      {agent, job} = build_setup([])
+      assert {%Job{turns: [_]}, :error, "boom"} = Agent.run_loop(agent, job, emit)
     end
   end
 
-  defp build_job(opts) do
-    agent = %Pado.Agent{
+  defp build_setup(opts) do
+    agent = %Agent{
       llm: %Pado.Agent.LLM{
         provider: :openai_codex,
         credentials: Credentials.build(:openai_codex, "a", "r", 3600),
@@ -179,13 +175,14 @@ defmodule Pado.AgentTest do
       max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
-    %Job{
-      agent: agent,
+    job = %Job{
       messages: [User.new("hi")],
       session_id: "s1",
       job_id: "j1",
       turns: Keyword.get(opts, :turns, [])
     }
+
+    {agent, job}
   end
 
   defp with_tool_call do

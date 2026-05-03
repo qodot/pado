@@ -1,5 +1,6 @@
 defmodule Pado.Agent do
   alias Pado.Agent.{Event, Harness, Job, LLM, Turn}
+  alias Pado.LLM.Context, as: LLMContext
 
   @type t :: %__MODULE__{
           name: String.t() | nil,
@@ -21,16 +22,25 @@ defmodule Pado.Agent do
     max_turns: 10
   ]
 
-  @spec loop(Job.t()) :: Enumerable.t()
-  def loop(%Job{} = job) do
+  @spec llm_context(t(), Job.t()) :: LLMContext.t()
+  def llm_context(%__MODULE__{} = agent, %Job{} = job) do
+    %LLMContext{
+      system_prompt: agent.harness.system_prompt,
+      messages: Job.llm_messages(job),
+      tools: Enum.map(agent.harness.tools, & &1.schema)
+    }
+  end
+
+  @spec loop(t(), Job.t()) :: Enumerable.t()
+  def loop(%__MODULE__{} = agent, %Job{} = job) do
     Stream.resource(
-      fn -> start_worker(job) end,
+      fn -> start_worker(agent, job) end,
       &pop_event/1,
       &cleanup/1
     )
   end
 
-  defp start_worker(%Job{} = job) do
+  defp start_worker(agent, %Job{} = job) do
     owner = self()
     ref = make_ref()
     emit = fn ev -> send(owner, {ref, ev}) end
@@ -38,7 +48,7 @@ defmodule Pado.Agent do
     worker =
       Task.async(fn ->
         emit.({:job_start, %{job_id: job.job_id}})
-        {final_job, status, reason} = run_loop(job, emit)
+        {final_job, status, reason} = run_loop(agent, job, emit)
 
         emit.(
           {:job_end,
@@ -73,8 +83,8 @@ defmodule Pado.Agent do
   end
 
   @doc false
-  @spec next_step(Job.t()) :: next_decision()
-  def next_step(%Job{turns: turns, agent: %{max_turns: max}}) do
+  @spec next_step(t(), Job.t()) :: next_decision()
+  def next_step(%__MODULE__{max_turns: max}, %Job{turns: turns}) do
     cond do
       length(turns) >= max -> :max_turns
       has_tool_calls?(List.last(turns)) -> :continue
@@ -86,17 +96,17 @@ defmodule Pado.Agent do
   defp has_tool_calls?(%Turn{assistant: assistant}), do: Turn.tool_calls(assistant) != []
 
   @doc false
-  @spec run_loop(Job.t(), emit_fun) :: {Job.t(), Event.status(), term() | nil}
-  def run_loop(%Job{} = job, emit) do
+  @spec run_loop(t(), Job.t(), emit_fun) :: {Job.t(), Event.status(), term() | nil}
+  def run_loop(%__MODULE__{} = agent, %Job{} = job, emit) do
     index = length(job.turns) + 1
     emit.({:turn_start, %{job_id: job.job_id, turn_index: index}})
 
-    case Turn.take(job, emit) do
+    case Turn.take(agent, job, emit) do
       {:ok, job} ->
         emit.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
 
-        case next_step(job) do
-          :continue -> run_loop(job, emit)
+        case next_step(agent, job) do
+          :continue -> run_loop(agent, job, emit)
           status -> {job, status, nil}
         end
 
