@@ -260,6 +260,85 @@ defmodule Pado.Agent.TurnTest do
       assert {:error, :network} = Turn.take(job, [], emit)
     end
 
+    test "assistant가 tool_call을 요청하면 dispatch_tool 결과가 turn.tool_results에 순서대로 들어간다",
+         %{emit: emit, creds: creds} do
+      tool = make_tool("echo", fn args, _ -> args["text"] end)
+
+      asst = %Assistant{
+        content: [
+          {:text, "echo 호출"},
+          {:tool_call, %{id: "c1", name: "echo", args: %{"text" => "hi"}}},
+          {:tool_call, %{id: "c2", name: "echo", args: %{"text" => "bye"}}}
+        ]
+      }
+
+      Process.put(:fake_router_response, ok_stream(asst))
+      job = build_job(creds, tools: [tool])
+
+      assert {:ok, %Turn{tool_results: [tr1, tr2]}} = Turn.take(job, [], emit)
+      assert tr1.tool_call_id == "c1"
+      assert tr1.content == [{:text, "hi"}]
+      assert tr2.tool_call_id == "c2"
+      assert tr2.content == [{:text, "bye"}]
+    end
+
+    test "unknown tool은 ToolResult.error로 turn에 들어간다", %{emit: emit, creds: creds} do
+      asst = %Assistant{
+        content: [{:tool_call, %{id: "c1", name: "missing", args: %{}}}]
+      }
+
+      Process.put(:fake_router_response, ok_stream(asst))
+      job = build_job(creds, tools: [])
+
+      assert {:ok, %Turn{tool_results: [tr]}} = Turn.take(job, [], emit)
+      assert tr.is_error == true
+    end
+
+    test "tool_call마다 :tool_execution_start / :tool_execution_end를 emit한다", %{
+      emit: emit,
+      creds: creds
+    } do
+      tool = make_tool("echo", fn _, _ -> "ok" end)
+
+      asst = %Assistant{
+        content: [{:tool_call, %{id: "c1", name: "echo", args: %{"k" => "v"}}}]
+      }
+
+      Process.put(:fake_router_response, ok_stream(asst))
+      job = build_job(creds, tools: [tool])
+      Turn.take(job, [], emit)
+
+      assert_received {:emitted,
+                       {:tool_execution_start,
+                        %{
+                          job_id: "j1",
+                          turn_index: 1,
+                          tool_call_id: "c1",
+                          tool_name: "echo",
+                          args: %{"k" => "v"}
+                        }}}
+
+      assert_received {:emitted,
+                       {:tool_execution_end,
+                        %{
+                          job_id: "j1",
+                          turn_index: 1,
+                          tool_call_id: "c1",
+                          tool_name: "echo",
+                          is_error: false
+                        }}}
+    end
+
+    test "assistant에 tool_call이 없으면 tool_results는 빈 리스트", %{
+      emit: emit,
+      creds: creds
+    } do
+      Process.put(:fake_router_response, ok_stream(%Assistant{content: [{:text, "끝"}]}))
+      job = build_job(creds, tools: [make_tool("echo", fn _, _ -> "x" end)])
+
+      assert {:ok, %Turn{tool_results: []}} = Turn.take(job, [], emit)
+    end
+
     test "LLM 응답이 :error로 끝나면 {:error, %Turn{}}을 반환", %{emit: emit, creds: creds} do
       error_msg = %Assistant{stop_reason: :error, error_message: "boom"}
 
@@ -284,6 +363,7 @@ defmodule Pado.Agent.TurnTest do
       credential_fun: Keyword.get(opts, :credential_fun, fn -> {:ok, creds} end),
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
+      tools: Keyword.get(opts, :tools, []),
       job_id: "j1"
     }
   end

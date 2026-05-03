@@ -37,12 +37,14 @@ defmodule Pado.Agent.Turn do
          {:ok, stream} <-
            @router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
+      tool_results = dispatch_tools(assistant, job, index, emit)
+
       {:ok,
        %__MODULE__{
          index: index,
          users: users,
          assistant: assistant,
-         tool_results: [],
+         tool_results: tool_results,
          usage: assistant.usage
        }}
     else
@@ -101,6 +103,39 @@ defmodule Pado.Agent.Turn do
   end
 
   defp finalize_consume(result), do: result
+
+  defp dispatch_tools(%Assistant{} = assistant, %Job{} = job, index, emit) do
+    assistant
+    |> tool_calls()
+    |> Enum.map(fn call ->
+      emit.(
+        {:tool_execution_start,
+         %{
+           job_id: job.job_id,
+           turn_index: index,
+           tool_call_id: call.id,
+           tool_name: call.name,
+           args: call.args
+         }}
+      )
+
+      result = dispatch_tool(call, job.tools)
+
+      emit.(
+        {:tool_execution_end,
+         %{
+           job_id: job.job_id,
+           turn_index: index,
+           tool_call_id: call.id,
+           tool_name: call.name,
+           result: result,
+           is_error: result.is_error
+         }}
+      )
+
+      result
+    end)
+  end
 
   @doc false
   @spec tool_calls(Assistant.t()) :: [Message.tool_call()]
