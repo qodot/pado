@@ -1,5 +1,5 @@
-defmodule Pado.LLMRouter.OAuth.Provider do
-  alias Pado.LLMRouter.OAuth.Credentials
+defmodule Pado.LLMRouter.Credential.OAuth.Provider do
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   @type auth_info :: %{
           required(:url) => String.t(),

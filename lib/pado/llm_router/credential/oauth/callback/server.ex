@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.OAuth.Callback.Server do
+defmodule Pado.LLMRouter.Credential.OAuth.Callback.Server do
   @default_port 1455
   @default_host {127, 0, 0, 1}
   @default_timeout 300_000
@@ -21,7 +21,7 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
     plug_opts = %{parent: parent, ref: ref, expected_state: expected_state}
 
     bandit_opts = [
-      plug: {Pado.LLMRouter.OAuth.Callback.Server.Plug, plug_opts},
+      plug: {Pado.LLMRouter.Credential.OAuth.Callback.Server.Plug, plug_opts},
       port: port,
       ip: host,
       startup_log: false
@@ -65,7 +65,7 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
     cond do
       not Code.ensure_loaded?(Bandit) ->
         raise """
-        Pado.LLMRouter.OAuth.Callback.Server를 쓰려면 :bandit이 필요합니다.
+        Pado.LLMRouter.Credential.OAuth.Callback.Server를 쓰려면 :bandit이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
@@ -75,16 +75,16 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
 
       not Code.ensure_loaded?(Plug) ->
         raise """
-        Pado.LLMRouter.OAuth.Callback.Server를 쓰려면 :plug이 필요합니다.
+        Pado.LLMRouter.Credential.OAuth.Callback.Server를 쓰려면 :plug이 필요합니다.
 
         mix.exs에 다음을 추가하세요.
 
             {:plug, "~> 1.16"}
         """
 
-      not Code.ensure_loaded?(Pado.LLMRouter.OAuth.Callback.Server.Plug) ->
+      not Code.ensure_loaded?(Pado.LLMRouter.Credential.OAuth.Callback.Server.Plug) ->
         raise """
-        Pado.LLMRouter.OAuth.Callback.Server.Plug가 컴파일되지 않았습니다.
+        Pado.LLMRouter.Credential.OAuth.Callback.Server.Plug가 컴파일되지 않았습니다.
         컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
         받고 재컴파일하세요.
         """
@@ -96,11 +96,11 @@ defmodule Pado.LLMRouter.OAuth.Callback.Server do
 end
 
 if Code.ensure_loaded?(Plug) do
-  defmodule Pado.LLMRouter.OAuth.Callback.Server.Plug do
+  defmodule Pado.LLMRouter.Credential.OAuth.Callback.Server.Plug do
     @behaviour Plug
 
     import Plug.Conn
-    alias Pado.LLMRouter.OAuth.Callback.Page
+    alias Pado.LLMRouter.Credential.OAuth.Callback.Page
 
     @impl Plug
     def init(opts), do: opts

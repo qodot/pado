@@ -1,11 +1,11 @@
 defmodule Mix.Tasks.Pado.LlmRouter.Login do
   use Mix.Task
 
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   @provider_aliases %{
-    "openai-codex" => Pado.LLMRouter.OAuth.OpenAICodex,
-    "openai_codex" => Pado.LLMRouter.OAuth.OpenAICodex
+    "openai-codex" => Pado.LLMRouter.Credential.OAuth.OpenAICodex,
+    "openai_codex" => Pado.LLMRouter.Credential.OAuth.OpenAICodex
   }
 
   @switches [
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
     end
   end
 
-  defp resolve_provider([]), do: Pado.LLMRouter.OAuth.OpenAICodex
+  defp resolve_provider([]), do: Pado.LLMRouter.Credential.OAuth.OpenAICodex
 
   defp resolve_provider([alias_name | _]) do
     case Map.fetch(@provider_aliases, alias_name) do

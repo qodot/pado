@@ -4,7 +4,7 @@ defmodule Pado.Agent.TurnTest do
   alias Pado.Agent.{Job, Turn}
   alias Pado.LLMRouter.{Context, Model, Usage}
   alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   describe "as_llm_messages/1" do
     test "users, assistant, tool_results를 시간순으로 펼친다" do

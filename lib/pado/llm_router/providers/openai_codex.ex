@@ -3,7 +3,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex do
 
   alias Pado.LLMRouter.{Context, Model}
   alias Pado.LLMRouter.Stream, as: RouterStream
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
   alias Pado.LLMRouter.Providers.OpenAICodex.{EventMapper, Request, SSE}
 
   @finch_pool Req.Finch

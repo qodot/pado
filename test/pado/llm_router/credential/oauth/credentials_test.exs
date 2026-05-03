@@ -1,7 +1,7 @@
-defmodule Pado.LLMRouter.OAuth.CredentialsTest do
+defmodule Pado.LLMRouter.Credential.OAuth.CredentialsTest do
   use ExUnit.Case, async: true
 
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   test "크레덴셜을 JSON 호환 맵으로 직렬화하고 다시 읽는다" do
     expires_at = ~U[2026-04-26 12:34:56Z]

@@ -1,7 +1,7 @@
 defmodule Pado.Agent.Job do
   alias Pado.Agent.Tool
   alias Pado.LLMRouter.{Context, Model}
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   @type credential_fun :: (-> {:ok, Credentials.t()} | {:error, term()})
 

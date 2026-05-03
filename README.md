@@ -103,11 +103,11 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 | `Pado.LLMRouter.Providers.OpenAICodex.SSE` | Server-Sent Events 청크 파서 |
 | `Pado.LLMRouter.Providers.OpenAICodex.EventMapper` | Codex SSE 이벤트를 Pado 이벤트로 정규화 |
 | `Pado.LLMRouter.Providers.OpenAICodex` | Finch 기반 실제 스트리밍 어댑터 |
-| `Pado.LLMRouter.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
-| `Pado.LLMRouter.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
-| `Pado.LLMRouter.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
-| `Pado.LLMRouter.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) 로그인·갱신 |
-| `Pado.LLMRouter.OAuth.Callback.Server` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
+| `Pado.LLMRouter.Credential.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
+| `Pado.LLMRouter.Credential.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
+| `Pado.LLMRouter.Credential.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
+| `Pado.LLMRouter.Credential.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) 로그인·갱신 |
+| `Pado.LLMRouter.Credential.OAuth.Callback.Server` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
 | `Mix.Tasks.Pado.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
 
 ### 설계 메모
@@ -155,7 +155,7 @@ alias Pado.LLMRouter
 alias Pado.LLMRouter.Catalog.OpenAICodex, as: OpenAICodexCatalog
 alias Pado.LLMRouter.Context
 alias Pado.LLMRouter.Message.User
-alias Pado.LLMRouter.OAuth.{Credentials, OpenAICodex}
+alias Pado.LLMRouter.Credential.OAuth.{Credentials, OpenAICodex}
 
 path = Path.expand("~/.config/pado/openai.json")
 
@@ -207,7 +207,7 @@ callbacks = %{
   on_progress: fn msg -> IO.puts(msg) end
 }
 
-{:ok, creds} = Pado.LLMRouter.OAuth.OpenAICodex.login(callbacks)
+{:ok, creds} = Pado.LLMRouter.Credential.OAuth.OpenAICodex.login(callbacks)
 ```
 
 ---
@@ -265,7 +265,7 @@ end
 
 ## 출처와 감사
 
-`Pado.LLMRouter.OAuth.OpenAICodex`의 동작(엔드포인트, 비표준 `authorize`
+`Pado.LLMRouter.Credential.OAuth.OpenAICodex`의 동작(엔드포인트, 비표준 `authorize`
 파라미터, JWT 클레임 구조, 콜백 UX)은 **pi-mono 저자들이 역공학해 공개한 경로**를
 그대로 따른다. 같은 구조를 따르므로, 양쪽에서 만든 크레덴셜은
 `Credentials.from_map/1`의 `expires_at` 변환을 거치면 상호 호환된다.

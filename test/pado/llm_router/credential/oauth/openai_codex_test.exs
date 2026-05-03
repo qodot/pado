@@ -1,7 +1,7 @@
-defmodule Pado.LLMRouter.OAuth.OpenAICodexTest do
+defmodule Pado.LLMRouter.Credential.OAuth.OpenAICodexTest do
   use ExUnit.Case, async: true
 
-  alias Pado.LLMRouter.OAuth.OpenAICodex
+  alias Pado.LLMRouter.Credential.OAuth.OpenAICodex
 
   test "수동 인가 입력에서 코드와 state를 파싱한다" do
     assert OpenAICodex.parse_authorization_input("") == %{}

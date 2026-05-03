@@ -1,7 +1,7 @@
-defmodule Pado.LLMRouter.OAuth.OpenAICodex do
-  @behaviour Pado.LLMRouter.OAuth.Provider
+defmodule Pado.LLMRouter.Credential.OAuth.OpenAICodex do
+  @behaviour Pado.LLMRouter.Credential.OAuth.Provider
 
-  alias Pado.LLMRouter.OAuth.{Callback, Credentials, PKCE}
+  alias Pado.LLMRouter.Credential.OAuth.{Callback, Credentials, PKCE}
 
   require Logger
 

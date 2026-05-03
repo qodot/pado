@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.OAuth.Callback.Page do
+defmodule Pado.LLMRouter.Credential.OAuth.Callback.Page do
   def success_html(message \\ "인증이 완료되었습니다. 이 창을 닫아도 됩니다.") do
     render(%{
       title: "인증 성공",

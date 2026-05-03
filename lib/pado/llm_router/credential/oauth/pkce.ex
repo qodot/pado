@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.OAuth.PKCE do
+defmodule Pado.LLMRouter.Credential.OAuth.PKCE do
   @verifier_bytes 32
 
   @type pair :: %{verifier: String.t(), challenge: String.t()}

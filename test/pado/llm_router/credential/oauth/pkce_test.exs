@@ -1,7 +1,7 @@
-defmodule Pado.LLMRouter.OAuth.PKCETest do
+defmodule Pado.LLMRouter.Credential.OAuth.PKCETest do
   use ExUnit.Case, async: true
 
-  alias Pado.LLMRouter.OAuth.PKCE
+  alias Pado.LLMRouter.Credential.OAuth.PKCE
 
   test "PKCE verifier와 challenge는 base64url 형식이다" do
     %{verifier: verifier, challenge: challenge} = PKCE.generate()

@@ -1,4 +1,4 @@
-defmodule Pado.LLMRouter.OAuth.Credentials do
+defmodule Pado.LLMRouter.Credential.OAuth.Credentials do
   @type t :: %__MODULE__{
           provider: atom,
           access: String.t(),

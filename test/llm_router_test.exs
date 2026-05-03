@@ -4,7 +4,7 @@ defmodule Pado.LLMRouterTest do
   alias Pado.LLMRouter
   alias Pado.LLMRouter.{Catalog, Context, Model, Stream}
   alias Pado.LLMRouter.Message.User
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   test "알 수 없는 API는 어댑터 없음 오류를 반환한다" do
     model = %Model{id: "dummy", provider: :dummy}

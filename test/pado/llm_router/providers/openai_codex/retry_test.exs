@@ -4,7 +4,7 @@ defmodule Pado.LLMRouter.Providers.OpenAICodex.RetryTest do
   alias Pado.LLMRouter
   alias Pado.LLMRouter.{Context, Model}
   alias Pado.LLMRouter.Message.User
-  alias Pado.LLMRouter.OAuth.Credentials
+  alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   defmodule RetryPlug do
     import Plug.Conn
