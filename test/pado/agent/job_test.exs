@@ -6,6 +6,29 @@ defmodule Pado.Agent.JobTest do
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
+  describe "llm_context/1" do
+    test "job.context를 바탕으로 llm_messages와 llm_tools를 채워 반환" do
+      tool = %Pado.Agent.Tool{
+        schema: Pado.LLM.Tool.new("search", "d", %{}),
+        execute: fn _, _ -> "" end
+      }
+
+      asst = %Assistant{content: [{:text, "a"}]}
+      base_msgs = [User.new("first")]
+
+      job = %{
+        build_job(context: Context.new(messages: base_msgs, system_prompt: "sys"))
+        | tools: [tool],
+          turns: [%Turn{index: 1, assistant: asst}]
+      }
+
+      ctx = Job.llm_context(job)
+      assert ctx.system_prompt == "sys"
+      assert ctx.messages == base_msgs ++ [asst]
+      assert ctx.tools == [tool.schema]
+    end
+  end
+
   describe "llm_tools/1" do
     test "job.tools에서 schema만 순서대로 추출" do
       tool_a = %Pado.Agent.Tool{

@@ -30,12 +30,9 @@ defmodule Pado.Agent.Turn do
     index = length(job.turns) + 1
     users = []
 
-    msgs = Job.llm_messages(job) ++ users
-    ctx = %{job.context | messages: msgs, tools: Job.llm_tools(job)}
-
     with {:ok, creds} <- job.credential_fun.(),
          {:ok, stream} <-
-           @router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
+           @router.stream(job.model, Job.llm_context(job), creds, job.session_id, job.llm_opts),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
       tool_results = dispatch_tools(assistant, job, index, emit)
 

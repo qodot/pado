@@ -40,4 +40,9 @@ defmodule Pado.Agent.Job do
   def llm_tools(%__MODULE__{} = job) do
     Enum.map(job.tools, & &1.schema)
   end
+
+  @spec llm_context(t()) :: Context.t()
+  def llm_context(%__MODULE__{} = job) do
+    %{job.context | messages: llm_messages(job), tools: llm_tools(job)}
+  end
 end
