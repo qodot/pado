@@ -196,6 +196,21 @@ defmodule Pado.Agent.TurnTest do
       assert {:ok, %Turn{usage: ^usage}} = Turn.take(job, [], emit)
     end
 
+    test "router.stream에 job.tools의 definition 목록이 ctx.tools로 전달된다", %{
+      emit: emit,
+      creds: creds
+    } do
+      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+
+      tool_a = make_tool("search", fn _, _ -> "a" end)
+      tool_b = make_tool("fetch", fn _, _ -> "b" end)
+      job = build_job(creds, tools: [tool_a, tool_b])
+      Turn.take(job, [], emit)
+
+      expected = [tool_a.definition, tool_b.definition]
+      assert_received {:fake_router_called, %{ctx: %Context{tools: ^expected}}}
+    end
+
     test "router.stream에 base context messages가 그대로 전달된다", %{
       emit: emit,
       creds: creds
