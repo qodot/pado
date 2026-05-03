@@ -1,4 +1,4 @@
-# Pado.LLMRouter 프로젝트 지침
+# Pado.LLM 프로젝트 지침
 
 이 문서는 이 저장소에서 작업하는 에이전트·사용자 모두에게 적용된다.
 
@@ -53,7 +53,7 @@
 
 ## OAuth / 크레덴셜 취급
 
-- 라이브러리는 **어떤 영속 저장소도 소유하지 않는다.** 로그인 결과는 호출자에게 `%Pado.LLMRouter.Credential.OAuth.Credentials{}`로 반환만 한다.
+- 라이브러리는 **어떤 영속 저장소도 소유하지 않는다.** 로그인 결과는 호출자에게 `%Pado.LLM.Credential.OAuth.Credentials{}`로 반환만 한다.
 - 테스트·스크립트·문서 안에 **실제 토큰을 절대 커밋하지 않는다.** 샘플이 필요하면 명백히 합성된 더미(`"access_xxx"`, `"refresh_yyy"` 등)를 쓴다.
 - `refresh/1` 호출 결과는 항상 새 `%Credentials{}`를 돌려주며, 저장소 갱신(로테이션)은 호출자 책임임을 문서에 명시한다.
 

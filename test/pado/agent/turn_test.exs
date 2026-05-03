@@ -2,9 +2,9 @@ defmodule Pado.Agent.TurnTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.{Job, Turn}
-  alias Pado.LLMRouter.{Context, Model, Usage}
-  alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
-  alias Pado.LLMRouter.Credential.OAuth.Credentials
+  alias Pado.LLM.{Context, Model, Usage}
+  alias Pado.LLM.Message.{Assistant, ToolResult, User}
+  alias Pado.LLM.Credential.OAuth.Credentials
 
   describe "as_llm_messages/1" do
     test "users, assistant, tool_results를 시간순으로 펼친다" do
@@ -105,7 +105,7 @@ defmodule Pado.Agent.TurnTest do
       assert_received {:emitted, {:message_start, %{job_id: "job-1", message: ^first}}}
     end
 
-    test "모든 LLMRouter 이벤트가 :message_update로 중계된다", %{emit: emit} do
+    test "모든 LLM 이벤트가 :message_update로 중계된다", %{emit: emit} do
       events = [
         {:start, %{message: %Assistant{}}},
         {:text_delta, %{index: 0, delta: "hi"}},

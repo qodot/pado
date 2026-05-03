@@ -1,8 +1,8 @@
 defmodule Pado.Agent.Event do
   alias Pado.Agent.Turn
-  alias Pado.LLMRouter
-  alias Pado.LLMRouter.Message
-  alias Pado.LLMRouter.Message.{Assistant, ToolResult}
+  alias Pado.LLM
+  alias Pado.LLM.Message
+  alias Pado.LLM.Message.{Assistant, ToolResult}
 
   @type job_id :: String.t()
   @type turn_index :: pos_integer()
@@ -20,7 +20,7 @@ defmodule Pado.Agent.Event do
           | {:turn_start, %{job_id: job_id(), turn_index: turn_index()}}
           | {:turn_end, %{job_id: job_id(), turn: Turn.t()}}
           | {:message_start, %{job_id: job_id(), message: Message.t()}}
-          | {:message_update, %{job_id: job_id(), llm_event: LLMRouter.Event.t()}}
+          | {:message_update, %{job_id: job_id(), llm_event: LLM.Event.t()}}
           | {:message_end, %{job_id: job_id(), message: Message.t()}}
           | {:tool_execution_start,
              %{

@@ -1,10 +1,10 @@
 defmodule Pado.Agent.Turn do
   alias Pado.Agent.{Event, Job}
-  alias Pado.LLMRouter.Message
-  alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
-  alias Pado.LLMRouter.Usage
+  alias Pado.LLM.Message
+  alias Pado.LLM.Message.{Assistant, ToolResult, User}
+  alias Pado.LLM.Usage
 
-  @router Application.compile_env(:pado, :router, Pado.LLMRouter)
+  @router Application.compile_env(:pado, :router, Pado.LLM)
 
   @type t :: %__MODULE__{
           index: pos_integer(),
