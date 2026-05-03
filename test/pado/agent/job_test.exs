@@ -2,23 +2,13 @@ defmodule Pado.Agent.JobTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.{Job, Turn}
-  alias Pado.LLM.{Context, Model}
+  alias Pado.LLM.Model
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   describe "llm_context/1" do
     test "agent.system_prompt가 ctx.system_prompt에 들어간다" do
       job = build_job(system_prompt: "sys")
       assert Job.llm_context(job).system_prompt == "sys"
-    end
-
-    test "job.context.system_prompt는 무시되고 agent.system_prompt만 사용" do
-      job =
-        build_job(
-          system_prompt: "agent_sys",
-          context: Context.new(messages: [User.new("base")], system_prompt: "ctx_sys")
-        )
-
-      assert Job.llm_context(job).system_prompt == "agent_sys"
     end
 
     test "messages와 tools도 함께 채워진다" do
@@ -31,7 +21,7 @@ defmodule Pado.Agent.JobTest do
       base_msgs = [User.new("first")]
 
       job = %{
-        build_job(context: Context.new(messages: base_msgs), tools: [tool])
+        build_job(messages: base_msgs, tools: [tool])
         | turns: [%Turn{index: 1, assistant: asst}]
       }
 
@@ -64,9 +54,9 @@ defmodule Pado.Agent.JobTest do
   end
 
   describe "llm_messages/1" do
-    test "turns가 비어 있으면 base context messages 그대로" do
+    test "turns가 비어 있으면 job.messages 그대로" do
       base = [User.new("first")]
-      job = build_job(context: Context.new(messages: base))
+      job = build_job(messages: base)
 
       assert Job.llm_messages(job) == base
     end
@@ -83,10 +73,7 @@ defmodule Pado.Agent.JobTest do
         tool_results: [tr]
       }
 
-      job = %{
-        build_job(context: Context.new(messages: base))
-        | turns: [turn]
-      }
+      job = %{build_job(messages: base) | turns: [turn]}
 
       assert Job.llm_messages(job) == base ++ [asst, tr]
     end
@@ -94,32 +81,31 @@ defmodule Pado.Agent.JobTest do
     test "여러 turn이 있으면 turn 순서대로 평탄화" do
       asst1 = %Assistant{content: [{:text, "1"}]}
       asst2 = %Assistant{content: [{:text, "2"}]}
-      job = build_job()
 
       job = %{
-        job
+        build_job()
         | turns: [
             %Turn{index: 1, assistant: asst1},
             %Turn{index: 2, assistant: asst2}
           ]
       }
 
-      assert Job.llm_messages(job) == job.context.messages ++ [asst1, asst2]
+      assert Job.llm_messages(job) == job.messages ++ [asst1, asst2]
     end
   end
 
   defp build_job(opts \\ []) do
     agent = %Pado.Agent{
       credential_provider: :test_provider,
+      model: %Model{id: "test", provider: :test},
       tools: Keyword.get(opts, :tools, []),
       system_prompt: Keyword.get(opts, :system_prompt)
     }
 
     %Job{
       agent: agent,
-      model: %Model{id: "test", provider: :test},
+      messages: Keyword.get(opts, :messages, [User.new("base")]),
       session_id: "s1",
-      context: Keyword.get(opts, :context, Context.new(messages: [User.new("base")])),
       job_id: "j1"
     }
   end

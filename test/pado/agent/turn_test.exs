@@ -228,7 +228,7 @@ defmodule Pado.Agent.TurnTest do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       base_msgs = [User.new("first")]
-      job = build_job(creds, context: Context.new(messages: base_msgs))
+      job = build_job(creds, messages: base_msgs)
       Turn.take(job, emit)
 
       assert_received {:fake_router_called, %{ctx: %Context{messages: ^base_msgs}}}
@@ -249,10 +249,7 @@ defmodule Pado.Agent.TurnTest do
         tool_results: []
       }
 
-      job = %{
-        build_job(creds, context: Context.new(messages: base_msgs))
-        | turns: [prev_turn]
-      }
+      job = %{build_job(creds, messages: base_msgs) | turns: [prev_turn]}
 
       Turn.take(job, emit)
 
@@ -266,7 +263,7 @@ defmodule Pado.Agent.TurnTest do
     } do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
-      job = %{build_job(creds) | llm_opts: [reasoning_effort: :low]}
+      job = build_job(creds, llm_opts: [reasoning_effort: :low])
       Turn.take(job, emit)
 
       assert_received {:fake_router_called,
@@ -400,14 +397,16 @@ defmodule Pado.Agent.TurnTest do
   defp build_job(_creds, opts \\ []) do
     agent = %Pado.Agent{
       credential_provider: Keyword.get(opts, :credential_provider, :test_provider),
-      tools: Keyword.get(opts, :tools, [])
+      model: Keyword.get(opts, :model, %Model{id: "test", provider: :test}),
+      tools: Keyword.get(opts, :tools, []),
+      llm_opts: Keyword.get(opts, :llm_opts, []),
+      max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
     %Job{
       agent: agent,
-      model: %Model{id: "test", provider: :test},
+      messages: Keyword.get(opts, :messages, [User.new("hi")]),
       session_id: "s1",
-      context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
       job_id: "j1"
     }
   end

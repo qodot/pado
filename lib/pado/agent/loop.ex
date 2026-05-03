@@ -57,7 +57,7 @@ defmodule Pado.Agent.Loop do
 
   @doc false
   @spec next_step(Job.t()) :: next_decision()
-  def next_step(%Job{turns: turns, max_turns: max}) do
+  def next_step(%Job{turns: turns, agent: %{max_turns: max}}) do
     cond do
       length(turns) >= max -> :max_turns
       has_tool_calls?(List.last(turns)) -> :continue

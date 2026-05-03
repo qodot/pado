@@ -32,11 +32,11 @@ defmodule Pado.Agent.Turn do
     with {:ok, creds} <- Credential.load(job.agent.credential_provider),
          {:ok, stream} <-
            job.agent.router.stream(
-             job.model,
+             job.agent.model,
              Job.llm_context(job),
              creds,
              job.session_id,
-             job.llm_opts
+             job.agent.llm_opts
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
       tool_results = dispatch_tools(assistant, job, index, emit)
