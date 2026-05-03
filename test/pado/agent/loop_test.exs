@@ -60,17 +60,81 @@ defmodule Pado.Agent.LoopTest do
     end
   end
 
+  describe "stream/1" do
+    setup do
+      test_pid = self()
+      creds = Credentials.build(:openai_codex, "a", "r", 3600)
+
+      Pado.Test.FakeLLM.setup_owner()
+      Pado.Test.FakeCredsLoader.setup_owner()
+      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
+
+      on_exit(fn ->
+        Pado.Test.FakeLLM.cleanup_owner(test_pid)
+        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
+      end)
+
+      :ok
+    end
+
+    test "1턴 정상 응답 → :job_start로 시작해서 :job_end status :done으로 종료" do
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
+
+      job = build_job([])
+      events = Loop.stream(job) |> Enum.to_list()
+
+      assert {:job_start, %{job_id: "j1"}} = hd(events)
+
+      assert {:job_end, %{status: :done, reason: nil, turns: [_]}} = List.last(events)
+    end
+
+    test "multi-turn (1턴 tool_call + 2턴 final) → turn_start 이벤트 2개" do
+      tool = make_tool("echo", fn _, _ -> "r" end)
+
+      asst1 = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
+      asst2 = %Assistant{content: [{:text, "final"}]}
+      Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
+
+      job = build_job(tools: [tool])
+      events = Loop.stream(job) |> Enum.to_list()
+
+      turn_starts = Enum.filter(events, &match?({:turn_start, _}, &1))
+      assert length(turn_starts) == 2
+
+      assert {:job_end, %{status: :done, turns: [_, _]}} = List.last(events)
+    end
+
+    test "credential 조회 실패 → :job_end status :error" do
+      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
+
+      job = build_job([])
+      events = Loop.stream(job) |> Enum.to_list()
+
+      assert {:job_end, %{status: :error, reason: :token_expired, turns: []}} =
+               List.last(events)
+    end
+  end
+
   describe "run_loop/2" do
     setup do
       test_pid = self()
       emit = fn ev -> send(test_pid, {:emitted, ev}) end
       creds = Credentials.build(:openai_codex, "a", "r", 3600)
-      Process.put(:fake_creds_response, {:ok, creds})
+
+      Pado.Test.FakeLLM.setup_owner()
+      Pado.Test.FakeCredsLoader.setup_owner()
+      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
+
+      on_exit(fn ->
+        Pado.Test.FakeLLM.cleanup_owner(test_pid)
+        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
+      end)
+
       {:ok, emit: emit, creds: creds}
     end
 
     test "1턴에 final 응답이면 :done으로 종료", %{emit: emit} do
-      Process.put(:fake_router_response, ok_stream(%Assistant{content: [{:text, "end"}]}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       job = build_job([])
       assert {%Job{turns: [_]}, :done, nil} = Loop.run_loop(job, emit)
@@ -88,7 +152,7 @@ defmodule Pado.Agent.LoopTest do
 
       asst2 = %Assistant{content: [{:text, "final"}]}
 
-      Process.put(:fake_router_responses, [ok_stream(asst1), ok_stream(asst2)])
+      Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
       job = build_job(tools: [tool])
       assert {%Job{turns: turns}, :done, nil} = Loop.run_loop(job, emit)
@@ -102,7 +166,7 @@ defmodule Pado.Agent.LoopTest do
       tool = make_tool("echo", fn _, _ -> "r" end)
 
       asst = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
-      Process.put(:fake_router_response, ok_stream(asst))
+      Pado.Test.FakeLLM.put_response(ok_stream(asst))
 
       job = build_job(max_turns: 1, tools: [tool])
       assert {%Job{turns: [_]}, :max_turns, nil} = Loop.run_loop(job, emit)
@@ -111,8 +175,7 @@ defmodule Pado.Agent.LoopTest do
     test "LLM 응답이 :error로 끝나면 :error 상태로 종료 + reason은 error_message", %{emit: emit} do
       error_msg = %Assistant{stop_reason: :error, error_message: "boom"}
 
-      Process.put(
-        :fake_router_response,
+      Pado.Test.FakeLLM.put_response(
         {:ok,
          [
            {:start, %{message: %Assistant{}}},
@@ -126,7 +189,7 @@ defmodule Pado.Agent.LoopTest do
     end
 
     test "credential 조회 실패는 :error 상태 + reason 그대로, turns는 추가 안 됨", %{emit: emit} do
-      Process.put(:fake_creds_response, {:error, :token_expired})
+      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
 
       job = build_job([])
       assert {%Job{turns: []}, :error, :token_expired} = Loop.run_loop(job, emit)

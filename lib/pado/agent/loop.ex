@@ -5,8 +5,54 @@ defmodule Pado.Agent.Loop do
   @type next_decision :: :continue | :done | :max_turns
 
   @spec stream(Job.t()) :: Enumerable.t()
-  def stream(%Job{} = _job) do
-    raise "not implemented"
+  def stream(%Job{} = job) do
+    Stream.resource(
+      fn -> start_worker(job) end,
+      &pop_event/1,
+      &cleanup/1
+    )
+  end
+
+  defp start_worker(%Job{} = job) do
+    owner = self()
+    ref = make_ref()
+    emit = fn ev -> send(owner, {ref, ev}) end
+
+    worker =
+      Task.async(fn ->
+        emit.({:job_start, %{job_id: job.job_id}})
+        {final_job, status, reason} = run_loop(job, emit)
+
+        emit.(
+          {:job_end,
+           %{
+             job_id: final_job.job_id,
+             status: status,
+             reason: reason,
+             turns: final_job.turns
+           }}
+        )
+      end)
+
+    %{ref: ref, worker: worker, halted: false}
+  end
+
+  defp pop_event(%{halted: true} = state), do: {:halt, state}
+
+  defp pop_event(%{ref: ref} = state) do
+    receive do
+      {^ref, ev} ->
+        if Event.terminal?(ev) do
+          {[ev], %{state | halted: true}}
+        else
+          {[ev], state}
+        end
+    end
+  end
+
+  defp cleanup(%{worker: worker}) do
+    Task.shutdown(worker, :brutal_kill)
+    :ok
   end
 
   @doc false

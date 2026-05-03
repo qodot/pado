@@ -163,12 +163,21 @@ defmodule Pado.Agent.TurnTest do
       test_pid = self()
       emit = fn ev -> send(test_pid, {:emitted, ev}) end
       creds = Credentials.build(:openai_codex, "access", "refresh", 3600)
-      Process.put(:fake_creds_response, {:ok, creds})
+
+      Pado.Test.FakeLLM.setup_owner()
+      Pado.Test.FakeCredsLoader.setup_owner()
+      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
+
+      on_exit(fn ->
+        Pado.Test.FakeLLM.cleanup_owner(test_pid)
+        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
+      end)
+
       {:ok, emit: emit, creds: creds}
     end
 
     test "새 turn이 job.turns 끝에 추가된 갱신된 Job을 반환한다", %{emit: emit, creds: creds} do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
       job = build_job(creds)
 
       assert {:ok, %Job{turns: turns}} = Turn.take(job, emit)
@@ -176,7 +185,7 @@ defmodule Pado.Agent.TurnTest do
     end
 
     test "job.turns 길이 + 1 이 새 turn의 index가 된다", %{emit: emit, creds: creds} do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       prev = [
         %Turn{index: 1, assistant: %Assistant{}},
@@ -191,7 +200,7 @@ defmodule Pado.Agent.TurnTest do
     test "assistant.usage가 새 turn.usage에 들어간다", %{emit: emit, creds: creds} do
       usage = %Usage{input: 100, output: 50, cache_read: 0, cache_write: 0, total_tokens: 150}
       final = %Assistant{usage: usage}
-      Process.put(:fake_router_response, ok_stream(final))
+      Pado.Test.FakeLLM.put_response(ok_stream(final))
 
       job = build_job(creds)
       assert {:ok, %Job{turns: [%Turn{usage: ^usage}]}} = Turn.take(job, emit)
@@ -201,7 +210,7 @@ defmodule Pado.Agent.TurnTest do
       emit: emit,
       creds: creds
     } do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       tool_a = make_tool("search", fn _, _ -> "a" end)
       tool_b = make_tool("fetch", fn _, _ -> "b" end)
@@ -216,7 +225,7 @@ defmodule Pado.Agent.TurnTest do
       emit: emit,
       creds: creds
     } do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       base_msgs = [User.new("first")]
       job = build_job(creds, context: Context.new(messages: base_msgs))
@@ -229,7 +238,7 @@ defmodule Pado.Agent.TurnTest do
       emit: emit,
       creds: creds
     } do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       base_msgs = [User.new("first")]
 
@@ -255,7 +264,7 @@ defmodule Pado.Agent.TurnTest do
       emit: emit,
       creds: creds
     } do
-      Process.put(:fake_router_response, ok_stream(%Assistant{}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
 
       job = %{build_job(creds) | llm_opts: [reasoning_effort: :low]}
       Turn.take(job, emit)
@@ -270,7 +279,7 @@ defmodule Pado.Agent.TurnTest do
     end
 
     test "Credential.load 실패면 {:error, reason}", %{emit: emit, creds: creds} do
-      Process.put(:fake_creds_response, {:error, :token_expired})
+      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
       job = build_job(creds)
       assert {:error, :token_expired} = Turn.take(job, emit)
     end
@@ -284,7 +293,7 @@ defmodule Pado.Agent.TurnTest do
     end
 
     test "router.stream이 {:error, _} 반환하면 {:error, reason}", %{emit: emit, creds: creds} do
-      Process.put(:fake_router_response, {:error, :network})
+      Pado.Test.FakeLLM.put_response({:error, :network})
       job = build_job(creds)
       assert {:error, :network} = Turn.take(job, emit)
     end
@@ -301,7 +310,7 @@ defmodule Pado.Agent.TurnTest do
         ]
       }
 
-      Process.put(:fake_router_response, ok_stream(asst))
+      Pado.Test.FakeLLM.put_response(ok_stream(asst))
       job = build_job(creds, tools: [tool])
 
       assert {:ok, %Job{turns: [%Turn{tool_results: [tr1, tr2]}]}} = Turn.take(job, emit)
@@ -316,7 +325,7 @@ defmodule Pado.Agent.TurnTest do
         content: [{:tool_call, %{id: "c1", name: "missing", args: %{}}}]
       }
 
-      Process.put(:fake_router_response, ok_stream(asst))
+      Pado.Test.FakeLLM.put_response(ok_stream(asst))
       job = build_job(creds, tools: [])
 
       assert {:ok, %Job{turns: [%Turn{tool_results: [tr]}]}} = Turn.take(job, emit)
@@ -333,7 +342,7 @@ defmodule Pado.Agent.TurnTest do
         content: [{:tool_call, %{id: "c1", name: "echo", args: %{"k" => "v"}}}]
       }
 
-      Process.put(:fake_router_response, ok_stream(asst))
+      Pado.Test.FakeLLM.put_response(ok_stream(asst))
       job = build_job(creds, tools: [tool])
       Turn.take(job, emit)
 
@@ -362,7 +371,7 @@ defmodule Pado.Agent.TurnTest do
       emit: emit,
       creds: creds
     } do
-      Process.put(:fake_router_response, ok_stream(%Assistant{content: [{:text, "끝"}]}))
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "끝"}]}))
       job = build_job(creds, tools: [make_tool("echo", fn _, _ -> "x" end)])
 
       assert {:ok, %Job{turns: [%Turn{tool_results: []}]}} = Turn.take(job, emit)
@@ -372,8 +381,7 @@ defmodule Pado.Agent.TurnTest do
          %{emit: emit, creds: creds} do
       error_msg = %Assistant{stop_reason: :error, error_message: "boom"}
 
-      Process.put(
-        :fake_router_response,
+      Pado.Test.FakeLLM.put_response(
         {:ok,
          [
            {:start, %{message: %Assistant{}}},
