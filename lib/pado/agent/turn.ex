@@ -35,24 +35,28 @@ defmodule Pado.Agent.Turn do
          {:ok, stream} <-
            job.router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
-      {:ok, build_turn(index, injected, assistant)}
+      {:ok,
+       %__MODULE__{
+         index: index,
+         injected: injected,
+         assistant: assistant,
+         tool_results: [],
+         usage: assistant.usage
+       }}
     else
       {:error, %Assistant{} = assistant} ->
-        {:error, build_turn(index, injected, assistant)}
+        {:error,
+         %__MODULE__{
+           index: index,
+           injected: injected,
+           assistant: assistant,
+           tool_results: [],
+           usage: assistant.usage
+         }}
 
       {:error, reason} ->
         {:error, reason}
     end
-  end
-
-  defp build_turn(index, injected, assistant) do
-    %__MODULE__{
-      index: index,
-      injected: injected,
-      assistant: assistant,
-      tool_results: [],
-      usage: assistant.usage
-    }
   end
 
   @doc false
