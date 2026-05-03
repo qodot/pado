@@ -1,5 +1,5 @@
 defmodule Pado.Agent.Turn do
-  alias Pado.Agent.Event
+  alias Pado.Agent.{Event, Job}
   alias Pado.LLMRouter.Message
   alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
   alias Pado.LLMRouter.Usage
@@ -20,6 +20,39 @@ defmodule Pado.Agent.Turn do
   @spec flatten(t()) :: [Message.t()]
   def flatten(%__MODULE__{injected: injected, assistant: assistant, tool_results: tool_results}) do
     injected ++ [assistant] ++ tool_results
+  end
+
+  @spec take(Job.t(), [t()], emit_fun) ::
+          {:ok, t()} | {:error, t()} | {:error, term()}
+  def take(%Job{} = job, prev_turns, emit) do
+    index = length(prev_turns) + 1
+    injected = []
+
+    msgs = job.context.messages ++ Enum.flat_map(prev_turns, &flatten/1) ++ injected
+    ctx = %{job.context | messages: msgs}
+
+    with {:ok, creds} <- job.credential_fun.(),
+         {:ok, stream} <-
+           job.router.stream(job.model, ctx, creds, job.session_id, job.llm_opts),
+         {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
+      {:ok, build_turn(index, injected, assistant)}
+    else
+      {:error, %Assistant{} = assistant} ->
+        {:error, build_turn(index, injected, assistant)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp build_turn(index, injected, assistant) do
+    %__MODULE__{
+      index: index,
+      injected: injected,
+      assistant: assistant,
+      tool_results: [],
+      usage: assistant.usage
+    }
   end
 
   @doc false
