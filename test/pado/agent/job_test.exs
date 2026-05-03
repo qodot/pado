@@ -16,9 +16,11 @@ defmodule Pado.Agent.JobTest do
       base_msgs = [User.new("first")]
 
       job = %{
-        build_job(context: Context.new(messages: base_msgs, system_prompt: "sys"))
-        | tools: [tool],
-          turns: [%Turn{index: 1, assistant: asst}]
+        build_job(
+          context: Context.new(messages: base_msgs, system_prompt: "sys"),
+          tools: [tool]
+        )
+        | turns: [%Turn{index: 1, assistant: asst}]
       }
 
       ctx = Job.llm_context(job)
@@ -40,7 +42,7 @@ defmodule Pado.Agent.JobTest do
         execute: fn _, _ -> "b" end
       }
 
-      job = %{build_job() | tools: [tool_a, tool_b]}
+      job = build_job(tools: [tool_a, tool_b])
       assert Job.llm_tools(job) == [tool_a.schema, tool_b.schema]
     end
 
@@ -96,9 +98,14 @@ defmodule Pado.Agent.JobTest do
   end
 
   defp build_job(opts \\ []) do
-    %Job{
-      model: %Model{id: "test", provider: :test},
+    agent = %Pado.Agent{
       credential_provider: :test_provider,
+      tools: Keyword.get(opts, :tools, [])
+    }
+
+    %Job{
+      agent: agent,
+      model: %Model{id: "test", provider: :test},
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("base")])),
       job_id: "j1"

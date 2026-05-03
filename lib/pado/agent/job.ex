@@ -1,27 +1,26 @@
 defmodule Pado.Agent.Job do
-  alias Pado.Agent.{Tool, Turn}
+  alias Pado.Agent
+  alias Pado.Agent.Turn
   alias Pado.LLM.{Context, Message, Model}
   alias Pado.LLM.Tool, as: LLMTool
 
   @type t :: %__MODULE__{
+          agent: Agent.t(),
           model: Model.t(),
-          credential_provider: atom(),
           session_id: String.t(),
           context: Context.t(),
-          tools: [Tool.t()],
           turns: [Turn.t()],
           job_id: String.t() | nil,
           llm_opts: keyword(),
           max_turns: pos_integer()
         }
 
-  @enforce_keys [:model, :credential_provider, :session_id, :context]
+  @enforce_keys [:agent, :model, :session_id, :context]
   defstruct [
+    :agent,
     :model,
-    :credential_provider,
     :session_id,
     :context,
-    tools: [],
     turns: [],
     job_id: nil,
     llm_opts: [],
@@ -35,7 +34,7 @@ defmodule Pado.Agent.Job do
 
   @spec llm_tools(t()) :: [LLMTool.t()]
   def llm_tools(%__MODULE__{} = job) do
-    Enum.map(job.tools, & &1.schema)
+    Enum.map(job.agent.tools, & &1.schema)
   end
 
   @spec llm_context(t()) :: Context.t()

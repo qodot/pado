@@ -398,12 +398,16 @@ defmodule Pado.Agent.TurnTest do
   end
 
   defp build_job(_creds, opts \\ []) do
-    %Job{
-      model: %Model{id: "test", provider: :test},
+    agent = %Pado.Agent{
       credential_provider: Keyword.get(opts, :credential_provider, :test_provider),
+      tools: Keyword.get(opts, :tools, [])
+    }
+
+    %Job{
+      agent: agent,
+      model: %Model{id: "test", provider: :test},
       session_id: "s1",
       context: Keyword.get(opts, :context, Context.new(messages: [User.new("hi")])),
-      tools: Keyword.get(opts, :tools, []),
       job_id: "j1"
     }
   end

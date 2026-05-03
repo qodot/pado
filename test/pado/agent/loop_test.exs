@@ -197,15 +197,19 @@ defmodule Pado.Agent.LoopTest do
   end
 
   defp build_job(opts) do
-    %Job{
-      model: %Model{id: "test", provider: :test},
+    agent = %Pado.Agent{
       credential_provider: :test_provider,
+      tools: Keyword.get(opts, :tools, [])
+    }
+
+    %Job{
+      agent: agent,
+      model: %Model{id: "test", provider: :test},
       session_id: "s1",
       context: Context.new(messages: [User.new("hi")]),
       job_id: "j1",
       turns: Keyword.get(opts, :turns, []),
-      max_turns: Keyword.get(opts, :max_turns, 10),
-      tools: Keyword.get(opts, :tools, [])
+      max_turns: Keyword.get(opts, :max_turns, 10)
     }
   end
 
