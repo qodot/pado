@@ -165,13 +165,7 @@ defmodule Pado.Agent.TurnTest do
       creds = Credentials.build(:openai_codex, "access", "refresh", 3600)
 
       Pado.Test.FakeLLM.setup_owner()
-      Pado.Test.FakeCredsLoader.setup_owner()
-      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
-
-      on_exit(fn ->
-        Pado.Test.FakeLLM.cleanup_owner(test_pid)
-        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
-      end)
+      on_exit(fn -> Pado.Test.FakeLLM.cleanup_owner(test_pid) end)
 
       {:ok, emit: emit, creds: creds}
     end
@@ -273,20 +267,6 @@ defmodule Pado.Agent.TurnTest do
                          session_id: "s1",
                          opts: [reasoning_effort: :low]
                        }}
-    end
-
-    test "Credential.load 실패면 {:error, reason}", %{emit: emit, creds: creds} do
-      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
-      job = build_job(creds)
-      assert {:error, :token_expired} = Turn.take(job, emit)
-    end
-
-    test "credential_provider가 config에 없으면 {:error, {:unconfigured_provider, _}}", %{
-      emit: emit,
-      creds: creds
-    } do
-      job = build_job(creds, credential_provider: :nope)
-      assert {:error, {:unconfigured_provider, :nope}} = Turn.take(job, emit)
     end
 
     test "router.stream이 {:error, _} 반환하면 {:error, reason}", %{emit: emit, creds: creds} do
@@ -394,12 +374,17 @@ defmodule Pado.Agent.TurnTest do
     end
   end
 
-  defp build_job(_creds, opts \\ []) do
+  defp build_job(creds, opts \\ []) do
     agent = %Pado.Agent{
-      credential_provider: Keyword.get(opts, :credential_provider, :test_provider),
-      model: Keyword.get(opts, :model, %Model{id: "test", provider: :test}),
-      tools: Keyword.get(opts, :tools, []),
-      llm_opts: Keyword.get(opts, :llm_opts, []),
+      llm: %Pado.Agent.LLM{
+        provider: :openai_codex,
+        credentials: creds,
+        model: Keyword.get(opts, :model, %Model{id: "test", provider: :test}),
+        opts: Keyword.get(opts, :llm_opts, [])
+      },
+      harness: %Pado.Agent.Harness{
+        tools: Keyword.get(opts, :tools, [])
+      },
       max_turns: Keyword.get(opts, :max_turns, 10)
     }
 

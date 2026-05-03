@@ -28,13 +28,13 @@ defmodule Pado.Agent.Job do
 
   @spec llm_tools(t()) :: [LLMTool.t()]
   def llm_tools(%__MODULE__{} = job) do
-    Enum.map(job.agent.tools, & &1.schema)
+    Enum.map(job.agent.harness.tools, & &1.schema)
   end
 
   @spec llm_context(t()) :: Context.t()
   def llm_context(%__MODULE__{} = job) do
     %Context{
-      system_prompt: job.agent.system_prompt,
+      system_prompt: job.agent.harness.system_prompt,
       messages: llm_messages(job),
       tools: llm_tools(job)
     }

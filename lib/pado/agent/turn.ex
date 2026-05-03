@@ -1,6 +1,5 @@
 defmodule Pado.Agent.Turn do
   alias Pado.Agent.{Event, Job, Tool}
-  alias Pado.LLM.Credential
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
@@ -29,14 +28,15 @@ defmodule Pado.Agent.Turn do
     index = length(job.turns) + 1
     users = []
 
-    with {:ok, creds} <- Credential.load(job.agent.credential_provider),
-         {:ok, stream} <-
-           job.agent.router.stream(
-             job.agent.model,
+    llm = job.agent.llm
+
+    with {:ok, stream} <-
+           llm.router.stream(
+             llm.model,
              Job.llm_context(job),
-             creds,
+             llm.credentials,
              job.session_id,
-             job.agent.llm_opts
+             llm.opts
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, emit) do
       tool_results = dispatch_tools(assistant, job, index, emit)
@@ -123,7 +123,7 @@ defmodule Pado.Agent.Turn do
          }}
       )
 
-      result = dispatch_tool(call, job.agent.tools)
+      result = dispatch_tool(call, job.agent.harness.tools)
 
       emit.(
         {:tool_execution_end,

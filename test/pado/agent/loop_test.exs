@@ -2,7 +2,7 @@ defmodule Pado.Agent.LoopTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.{Job, Loop, Tool, Turn}
-  alias Pado.LLM.{Context, Model, Usage}
+  alias Pado.LLM.{Model, Usage}
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}
   alias Pado.LLM.Tool, as: LLMTool
@@ -63,16 +63,9 @@ defmodule Pado.Agent.LoopTest do
   describe "stream/1" do
     setup do
       test_pid = self()
-      creds = Credentials.build(:openai_codex, "a", "r", 3600)
 
       Pado.Test.FakeLLM.setup_owner()
-      Pado.Test.FakeCredsLoader.setup_owner()
-      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
-
-      on_exit(fn ->
-        Pado.Test.FakeLLM.cleanup_owner(test_pid)
-        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
-      end)
+      on_exit(fn -> Pado.Test.FakeLLM.cleanup_owner(test_pid) end)
 
       :ok
     end
@@ -103,34 +96,17 @@ defmodule Pado.Agent.LoopTest do
 
       assert {:job_end, %{status: :done, turns: [_, _]}} = List.last(events)
     end
-
-    test "credential 조회 실패 → :job_end status :error" do
-      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
-
-      job = build_job([])
-      events = Loop.stream(job) |> Enum.to_list()
-
-      assert {:job_end, %{status: :error, reason: :token_expired, turns: []}} =
-               List.last(events)
-    end
   end
 
   describe "run_loop/2" do
     setup do
       test_pid = self()
       emit = fn ev -> send(test_pid, {:emitted, ev}) end
-      creds = Credentials.build(:openai_codex, "a", "r", 3600)
 
       Pado.Test.FakeLLM.setup_owner()
-      Pado.Test.FakeCredsLoader.setup_owner()
-      Pado.Test.FakeCredsLoader.put_response({:ok, creds})
+      on_exit(fn -> Pado.Test.FakeLLM.cleanup_owner(test_pid) end)
 
-      on_exit(fn ->
-        Pado.Test.FakeLLM.cleanup_owner(test_pid)
-        Pado.Test.FakeCredsLoader.cleanup_owner(test_pid)
-      end)
-
-      {:ok, emit: emit, creds: creds}
+      {:ok, emit: emit}
     end
 
     test "1턴에 final 응답이면 :done으로 종료", %{emit: emit} do
@@ -187,20 +163,18 @@ defmodule Pado.Agent.LoopTest do
       job = build_job([])
       assert {%Job{turns: [_]}, :error, "boom"} = Loop.run_loop(job, emit)
     end
-
-    test "credential 조회 실패는 :error 상태 + reason 그대로, turns는 추가 안 됨", %{emit: emit} do
-      Pado.Test.FakeCredsLoader.put_response({:error, :token_expired})
-
-      job = build_job([])
-      assert {%Job{turns: []}, :error, :token_expired} = Loop.run_loop(job, emit)
-    end
   end
 
   defp build_job(opts) do
     agent = %Pado.Agent{
-      credential_provider: :test_provider,
-      model: %Model{id: "test", provider: :test},
-      tools: Keyword.get(opts, :tools, []),
+      llm: %Pado.Agent.LLM{
+        provider: :openai_codex,
+        credentials: Credentials.build(:openai_codex, "a", "r", 3600),
+        model: %Model{id: "test", provider: :test}
+      },
+      harness: %Pado.Agent.Harness{
+        tools: Keyword.get(opts, :tools, [])
+      },
       max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
