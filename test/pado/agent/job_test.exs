@@ -6,7 +6,22 @@ defmodule Pado.Agent.JobTest do
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   describe "llm_context/1" do
-    test "job.context를 바탕으로 llm_messages와 llm_tools를 채워 반환" do
+    test "agent.system_prompt가 ctx.system_prompt에 들어간다" do
+      job = build_job(system_prompt: "sys")
+      assert Job.llm_context(job).system_prompt == "sys"
+    end
+
+    test "job.context.system_prompt는 무시되고 agent.system_prompt만 사용" do
+      job =
+        build_job(
+          system_prompt: "agent_sys",
+          context: Context.new(messages: [User.new("base")], system_prompt: "ctx_sys")
+        )
+
+      assert Job.llm_context(job).system_prompt == "agent_sys"
+    end
+
+    test "messages와 tools도 함께 채워진다" do
       tool = %Pado.Agent.Tool{
         schema: Pado.LLM.Tool.new("search", "d", %{}),
         execute: fn _, _ -> "" end
@@ -16,15 +31,11 @@ defmodule Pado.Agent.JobTest do
       base_msgs = [User.new("first")]
 
       job = %{
-        build_job(
-          context: Context.new(messages: base_msgs, system_prompt: "sys"),
-          tools: [tool]
-        )
+        build_job(context: Context.new(messages: base_msgs), tools: [tool])
         | turns: [%Turn{index: 1, assistant: asst}]
       }
 
       ctx = Job.llm_context(job)
-      assert ctx.system_prompt == "sys"
       assert ctx.messages == base_msgs ++ [asst]
       assert ctx.tools == [tool.schema]
     end
@@ -100,7 +111,8 @@ defmodule Pado.Agent.JobTest do
   defp build_job(opts \\ []) do
     agent = %Pado.Agent{
       credential_provider: :test_provider,
-      tools: Keyword.get(opts, :tools, [])
+      tools: Keyword.get(opts, :tools, []),
+      system_prompt: Keyword.get(opts, :system_prompt)
     }
 
     %Job{

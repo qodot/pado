@@ -39,6 +39,11 @@ defmodule Pado.Agent.Job do
 
   @spec llm_context(t()) :: Context.t()
   def llm_context(%__MODULE__{} = job) do
-    %{job.context | messages: llm_messages(job), tools: llm_tools(job)}
+    %{
+      job.context
+      | messages: llm_messages(job),
+        tools: llm_tools(job),
+        system_prompt: job.agent.system_prompt
+    }
   end
 end
