@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.Pado.LlmRouter.Login do
   use Mix.Task
 
+  alias Pado.LLMRouter.Credential
   alias Pado.LLMRouter.Credential.OAuth.Credentials
 
   @provider_aliases %{
@@ -102,10 +103,16 @@ defmodule Mix.Tasks.Pado.LlmRouter.Login do
   end
 
   defp write_output(%Credentials{} = creds, nil) do
-    creds
-    |> Credentials.to_map()
-    |> Jason.encode!(pretty: true)
-    |> IO.puts()
+    case Credential.save(creds.provider, creds) do
+      :ok ->
+        Mix.shell().info("크레덱셜을 :#{creds.provider} 매핑에 저장했습니다.")
+
+      {:error, {:unconfigured_provider, _}} ->
+        creds
+        |> Credentials.to_map()
+        |> Jason.encode!(pretty: true)
+        |> IO.puts()
+    end
   end
 
   defp write_output(%Credentials{} = creds, path) do

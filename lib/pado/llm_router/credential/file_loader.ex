@@ -12,6 +12,7 @@ defmodule Pado.LLMRouter.Credential.FileLoader do
   def save(%Credentials{} = creds, path) when is_binary(path) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(Credentials.to_map(creds), pretty: true))
+    _ = File.chmod(path, 0o600)
     :ok
   end
 
