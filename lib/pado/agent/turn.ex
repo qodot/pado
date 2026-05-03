@@ -15,7 +15,7 @@ defmodule Pado.Agent.Turn do
   defstruct [:index, :assistant, injected: [], tool_results: [], usage: nil]
 
   @spec flatten(t()) :: [Message.t()]
-  def flatten(%__MODULE__{} = _turn) do
-    raise "not implemented"
+  def flatten(%__MODULE__{injected: injected, assistant: assistant, tool_results: tool_results}) do
+    injected ++ [assistant] ++ tool_results
   end
 end
