@@ -30,7 +30,7 @@ defmodule Pado.Agent.Turn do
     index = length(job.turns) + 1
     users = []
 
-    msgs = job.context.messages ++ Enum.flat_map(job.turns, &as_llm_messages/1) ++ users
+    msgs = Job.llm_messages(job) ++ users
     router_tools = Enum.map(job.tools, & &1.definition)
     ctx = %{job.context | messages: msgs, tools: router_tools}
 
