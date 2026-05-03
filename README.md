@@ -90,7 +90,7 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 
 | 모듈 | 역할 |
 |---|---|
-| `Pado.LLMRouter` | `stream/3` 공개 진입점 |
+| `Pado.LLMRouter` | `stream/5` 공개 진입점 |
 | `Pado.LLMRouter.Provider` | 프로바이더 호출 behaviour |
 | `Pado.LLMRouter.Model` | 모델 메타데이터와 비용 계산 |
 | `Pado.LLMRouter.Context` | 시스템 프롬프트, 메시지, 도구 목록 입력 묶음 |
@@ -103,19 +103,24 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 | `Pado.LLMRouter.Providers.OpenAICodex.SSE` | Server-Sent Events 청크 파서 |
 | `Pado.LLMRouter.Providers.OpenAICodex.EventMapper` | Codex SSE 이벤트를 Pado 이벤트로 정규화 |
 | `Pado.LLMRouter.Providers.OpenAICodex` | Finch 기반 실제 스트리밍 어댑터 |
+| `Pado.LLMRouter.Credential` | provider key → loader 매핑을 config에서 읽어 dispatch |
+| `Pado.LLMRouter.Credential.FileLoader` | JSON 파일 기반 크레덴셜 저장/조회 (refresh + 재저장 포함) |
 | `Pado.LLMRouter.Credential.OAuth.Provider` | OAuth 기반 프로바이더 behaviour |
 | `Pado.LLMRouter.Credential.OAuth.Credentials` | 크레덴셜 구조체 + JSON 직렬화/역직렬화 |
 | `Pado.LLMRouter.Credential.OAuth.PKCE` | RFC 7636 기반 verifier/challenge/state |
 | `Pado.LLMRouter.Credential.OAuth.OpenAICodex` | ChatGPT Plus/Pro (Codex) 로그인·갱신 |
 | `Pado.LLMRouter.Credential.OAuth.Callback.Server` | 일회성 `127.0.0.1:1455` 리스너 (선택 의존성) |
-| `Mix.Tasks.Pado.LlmRouter.Login` | 콜백을 stdin/stdout에 배선한 레퍼런스 CLI |
+| `Mix.Tasks.Pado.LlmRouter.Login` | OAuth 로그인 후 config 매핑 경로에 자동 저장 (명시적 path 또는 stdout fallback) |
 
 ### 설계 메모
 
-- **라이브러리는 어떤 영속 저장소도 소유하지 않는다.** `login/2`는
+- **라이브러리 핵심은 어떤 영속 저장소도 소유하지 않는다.** `login/2`는
   `%Credentials{}`를 반환할 뿐이고, 저장·갱신·로테이션 관리는 호출자(서비스 앱)
   책임이다. Pi가 `pi-coding-agent`의 `AuthStorage`에 그 책임을 분리해 둔 것과
-  같은 원칙.
+  같은 원칙. 흔한 JSON 파일 저장소는 `Pado.LLMRouter.Credential.FileLoader`에
+  helper로 격리되어 있고, 호출자가 config에 매핑만 선언하면 자동 저장/조회된다.
+  DB/Vault/KMS 같은 다른 저장소는 호출자가 같은 인터페이스(`fetch/1`, `save/2`)를
+  가진 모듈을 만들어 매핑에 등록하면 된다.
 - **콜백 서버는 라이브러리 안에 내장**되어 있다. OpenAI의 `redirect_uri`가
   `http://localhost:1455/auth/callback`으로 서버에 등록되어 있어 우회할 수 없는
   프로토콜 상수이기 때문이다. 다만 UI·저장·프롬프트는 전부 호출자가 주입하는
@@ -130,55 +135,59 @@ AgentServer**로 정렬한 모델을 참고한다. 특히:
 
 ### 사용 방법
 
-#### 1. 크레덴셜 발급 (환경당 1회, 브라우저가 있는 머신)
+#### 1. 앱 config에 credentials 매핑 선언
 
-```bash
-$ mix pado.llm_router.login > ~/.config/pado/openai.json
-```
+```elixir
+# config/config.exs (또는 config/runtime.exs)
+import Config
 
-브라우저가 열리고 `localhost:1455`로 콜백이 돌아오면 다음과 같은 JSON이 출력된다:
-
-```json
-{
-  "provider": "openai_codex",
-  "access": "eyJhbGci…",
-  "refresh": "…",
-  "expires_at": "2026-04-23T08:00:00.000000Z",
-  "extra": { "account_id": "acct_…", "originator": "pi" }
+config :pado, credentials: %{
+  openai_codex:
+    {Pado.LLMRouter.Credential.FileLoader, Path.expand("~/.config/pado/openai.json")}
 }
 ```
 
-#### 2. 앱에서 로드 + 자동 갱신 + 스트리밍 호출
+매핑 값 `{Module, arg}`는 `Module.fetch(arg)` / `Module.save(creds, arg)`로
+디스패치된다. JSON 파일 외의 저장소를 쓰려면 같은 인터페이스를 가진 모듈을
+호출자가 만들어 매핑에 올리면 된다.
+
+#### 2. 크레덴셜 발급 (환경당 1회, 브라우저가 있는 머신)
+
+```bash
+$ mix pado.llm_router.login
+```
+
+브라우저가 열리고 `localhost:1455`로 콜백이 돌아오면 config 매핑의 `FileLoader`
+경로에 자동 저장되고 권한이 `0o600`으로 설정된다.
+
+매핑 없이 명시적 경로를 쓰고 싶으면:
+
+```bash
+$ mix pado.llm_router.login --output ~/.config/pado/openai.json
+```
+
+매핑도 `--output`도 없으면 stdout으로 JSON을 뱉어 셸 redirect로 처리해도 된다:
+
+```bash
+$ mix pado.llm_router.login > some.json
+```
+
+#### 3. 앱에서 크레덴셜 조회 + 스트리밍 호출
 
 ```elixir
 alias Pado.LLMRouter
 alias Pado.LLMRouter.Catalog.OpenAICodex, as: OpenAICodexCatalog
 alias Pado.LLMRouter.Context
+alias Pado.LLMRouter.Credential
 alias Pado.LLMRouter.Message.User
-alias Pado.LLMRouter.Credential.OAuth.{Credentials, OpenAICodex}
 
-path = Path.expand("~/.config/pado/openai.json")
-
-{:ok, creds} =
-  path
-  |> File.read!()
-  |> Jason.decode!()
-  |> Credentials.from_map()
-
-creds =
-  if Credentials.stale?(creds, 60) do
-    {:ok, refreshed} = OpenAICodex.refresh(creds)
-    File.write!(path, Jason.encode!(Credentials.to_map(refreshed), pretty: true))
-    refreshed
-  else
-    creds
-  end
+# config 매핑을 통해 자동으로 stale 체크 + refresh + 재저장까지 처리한다.
+{:ok, creds} = Credential.fetch(:openai_codex)
 
 model = OpenAICodexCatalog.default()
 ctx = Context.new(messages: [User.new("안녕. 한 문장으로 자기소개해줘.")])
 
-session_id = "session-1"
-{:ok, stream} = LLMRouter.stream(model, ctx, creds, session_id, reasoning_effort: :low)
+{:ok, stream} = LLMRouter.stream(model, ctx, creds, "session-1", reasoning_effort: :low)
 
 Enum.each(stream, fn
   {:text_delta, %{delta: delta}} -> IO.write(delta)
@@ -193,10 +202,11 @@ end)
 ```
 
 > 매 `refresh/1` 호출마다 서버가 새 `refresh_token`을 발급한다(로테이션).
-> 반환된 크레덴셜을 반드시 저장해야 다음 갱신이 가능하다. 직접 HTTP 헤더를
-> 조립해야 하는 특수한 경우에는 `OpenAICodex.api_key/1`로 bearer 토큰을 꺼낼 수 있다.
+> `Credential.fetch/1` 안에서 `FileLoader`가 자동으로 재저장해주므로 따로
+> 신경쓸 필요는 없다. 직접 HTTP 헤더를 조립해야 하는 특수한 경우에는
+> `Pado.LLMRouter.Credential.OAuth.OpenAICodex.api_key/1`로 bearer 토큰을 꺼낼 수 있다.
 
-#### 3. `login/2`를 직접 호출 (Mix task 없이)
+#### 4. `login/2`를 직접 호출 (Mix task 없이)
 
 ```elixir
 callbacks = %{
