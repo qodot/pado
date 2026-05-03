@@ -5,7 +5,6 @@ defmodule Pado.Agent do
   @type t :: %__MODULE__{
           name: String.t() | nil,
           description: String.t() | nil,
-          max_turns: pos_integer(),
           llm: LLM.t(),
           harness: Harness.t()
         }
@@ -18,8 +17,7 @@ defmodule Pado.Agent do
     :llm,
     :harness,
     name: nil,
-    description: nil,
-    max_turns: 10
+    description: nil
   ]
 
   @spec llm_context(t(), Job.t()) :: LLMContext.t()
@@ -83,8 +81,8 @@ defmodule Pado.Agent do
   end
 
   @doc false
-  @spec next_step(t(), Job.t()) :: next_decision()
-  def next_step(%__MODULE__{max_turns: max}, %Job{turns: turns}) do
+  @spec next_step(Job.t()) :: next_decision()
+  def next_step(%Job{turns: turns, max_turns: max}) do
     cond do
       length(turns) >= max -> :max_turns
       has_tool_calls?(List.last(turns)) -> :continue
@@ -105,7 +103,7 @@ defmodule Pado.Agent do
       {:ok, job} ->
         emit.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
 
-        case next_step(agent, job) do
+        case next_step(job) do
           :continue -> run_loop(agent, job, emit)
           status -> {job, status, nil}
         end

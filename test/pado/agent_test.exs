@@ -8,14 +8,14 @@ defmodule Pado.AgentTest do
   alias Pado.LLM.Message.{Assistant, User}
   alias Pado.LLM.Tool, as: LLMTool
 
-  describe "next_step/2" do
+  describe "next_step/1" do
     test "turns가 비어 있으면 :done (방어적 default)" do
-      {agent, job} = build_setup(turns: [])
-      assert Agent.next_step(agent, job) == :done
+      {_agent, job} = build_setup(turns: [])
+      assert Agent.next_step(job) == :done
     end
 
     test "turns 길이가 max_turns에 도달하면 :max_turns" do
-      {agent, job} =
+      {_agent, job} =
         build_setup(
           max_turns: 2,
           turns: [
@@ -24,11 +24,11 @@ defmodule Pado.AgentTest do
           ]
         )
 
-      assert Agent.next_step(agent, job) == :max_turns
+      assert Agent.next_step(job) == :max_turns
     end
 
     test "turns 길이가 max_turns를 초과해도 :max_turns" do
-      {agent, job} =
+      {_agent, job} =
         build_setup(
           max_turns: 1,
           turns: [
@@ -37,27 +37,27 @@ defmodule Pado.AgentTest do
           ]
         )
 
-      assert Agent.next_step(agent, job) == :max_turns
+      assert Agent.next_step(job) == :max_turns
     end
 
     test "마지막 turn에 tool_call이 있고 max_turns 안 도달이면 :continue" do
-      {agent, job} =
+      {_agent, job} =
         build_setup(
           max_turns: 5,
           turns: [%Turn{index: 1, assistant: with_tool_call()}]
         )
 
-      assert Agent.next_step(agent, job) == :continue
+      assert Agent.next_step(job) == :continue
     end
 
     test "마지막 turn에 tool_call이 없고 max_turns 안 도달이면 :done" do
-      {agent, job} =
+      {_agent, job} =
         build_setup(
           max_turns: 5,
           turns: [%Turn{index: 1, assistant: %Assistant{content: [{:text, "끝"}]}}]
         )
 
-      assert Agent.next_step(agent, job) == :done
+      assert Agent.next_step(job) == :done
     end
   end
 
@@ -171,15 +171,15 @@ defmodule Pado.AgentTest do
       },
       harness: %Pado.Agent.Harness{
         tools: Keyword.get(opts, :tools, [])
-      },
-      max_turns: Keyword.get(opts, :max_turns, 10)
+      }
     }
 
     job = %Job{
       messages: [User.new("hi")],
       session_id: "s1",
       job_id: "j1",
-      turns: Keyword.get(opts, :turns, [])
+      turns: Keyword.get(opts, :turns, []),
+      max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
     {agent, job}

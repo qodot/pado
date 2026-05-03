@@ -389,14 +389,14 @@ defmodule Pado.Agent.TurnTest do
       },
       harness: %Pado.Agent.Harness{
         tools: Keyword.get(opts, :tools, [])
-      },
-      max_turns: Keyword.get(opts, :max_turns, 10)
+      }
     }
 
     job = %Job{
       messages: Keyword.get(opts, :messages, [User.new("hi")]),
       session_id: "s1",
-      job_id: "j1"
+      job_id: "j1",
+      max_turns: Keyword.get(opts, :max_turns, 10)
     }
 
     {agent, job}
