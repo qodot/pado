@@ -6,7 +6,7 @@ defmodule Pado.Agent.Turn do
 
   @type t :: %__MODULE__{
           index: pos_integer(),
-          injected: [User.t()],
+          users: [User.t()],
           assistant: Assistant.t(),
           tool_results: [ToolResult.t()],
           usage: Usage.t() | nil
@@ -15,20 +15,20 @@ defmodule Pado.Agent.Turn do
   @type emit_fun :: (Event.t() -> any())
 
   @enforce_keys [:index, :assistant]
-  defstruct [:index, :assistant, injected: [], tool_results: [], usage: nil]
+  defstruct [:index, :assistant, users: [], tool_results: [], usage: nil]
 
-  @spec flatten(t()) :: [Message.t()]
-  def flatten(%__MODULE__{injected: injected, assistant: assistant, tool_results: tool_results}) do
-    injected ++ [assistant] ++ tool_results
+  @spec as_llm_messages(t()) :: [Message.t()]
+  def as_llm_messages(%__MODULE__{users: users, assistant: assistant, tool_results: tool_results}) do
+    users ++ [assistant] ++ tool_results
   end
 
   @spec take(Job.t(), [t()], emit_fun) ::
           {:ok, t()} | {:error, t()} | {:error, term()}
   def take(%Job{} = job, prev_turns, emit) do
     index = length(prev_turns) + 1
-    injected = []
+    users = []
 
-    msgs = job.context.messages ++ Enum.flat_map(prev_turns, &flatten/1) ++ injected
+    msgs = job.context.messages ++ Enum.flat_map(prev_turns, &as_llm_messages/1) ++ users
     ctx = %{job.context | messages: msgs}
 
     with {:ok, creds} <- job.credential_fun.(),
@@ -38,7 +38,7 @@ defmodule Pado.Agent.Turn do
       {:ok,
        %__MODULE__{
          index: index,
-         injected: injected,
+         users: users,
          assistant: assistant,
          tool_results: [],
          usage: assistant.usage
@@ -48,7 +48,7 @@ defmodule Pado.Agent.Turn do
         {:error,
          %__MODULE__{
            index: index,
-           injected: injected,
+           users: users,
            assistant: assistant,
            tool_results: [],
            usage: assistant.usage

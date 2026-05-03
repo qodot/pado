@@ -6,9 +6,9 @@ defmodule Pado.Agent.TurnTest do
   alias Pado.LLMRouter.Message.{Assistant, ToolResult, User}
   alias Pado.LLMRouter.OAuth.Credentials
 
-  describe "flatten/1" do
-    test "injected, assistant, tool_results를 시간순으로 펼친다" do
-      injected = [User.new("잠깐 X도 봐줘")]
+  describe "as_llm_messages/1" do
+    test "users, assistant, tool_results를 시간순으로 펼친다" do
+      users = [User.new("X 해줘")]
       assistant = %Assistant{content: [{:text, "ok"}]}
 
       tool_results = [
@@ -18,48 +18,48 @@ defmodule Pado.Agent.TurnTest do
 
       turn = %Turn{
         index: 1,
-        injected: injected,
+        users: users,
         assistant: assistant,
         tool_results: tool_results
       }
 
-      assert Turn.flatten(turn) == injected ++ [assistant] ++ tool_results
+      assert Turn.as_llm_messages(turn) == users ++ [assistant] ++ tool_results
     end
 
-    test "injected가 비어 있으면 assistant + tool_results만" do
+    test "users가 비어 있으면 assistant + tool_results만" do
       assistant = %Assistant{content: [{:text, "hi"}]}
       tr = ToolResult.text("c1", "t", "r")
 
       turn = %Turn{
         index: 1,
-        injected: [],
+        users: [],
         assistant: assistant,
         tool_results: [tr]
       }
 
-      assert Turn.flatten(turn) == [assistant, tr]
+      assert Turn.as_llm_messages(turn) == [assistant, tr]
     end
 
-    test "tool_results가 비어 있으면 injected + assistant만" do
-      injected = [User.new("X")]
+    test "tool_results가 비어 있으면 users + assistant만" do
+      users = [User.new("X")]
       assistant = %Assistant{content: [{:text, "y"}]}
 
       turn = %Turn{
         index: 1,
-        injected: injected,
+        users: users,
         assistant: assistant,
         tool_results: []
       }
 
-      assert Turn.flatten(turn) == injected ++ [assistant]
+      assert Turn.as_llm_messages(turn) == users ++ [assistant]
     end
 
-    test "injected와 tool_results 둘 다 비어 있으면 assistant만" do
+    test "users와 tool_results 둘 다 비어 있으면 assistant만" do
       assistant = %Assistant{content: [{:text, "only"}]}
 
       turn = %Turn{index: 1, assistant: assistant}
 
-      assert Turn.flatten(turn) == [assistant]
+      assert Turn.as_llm_messages(turn) == [assistant]
     end
   end
 
@@ -165,13 +165,12 @@ defmodule Pado.Agent.TurnTest do
       {:ok, emit: emit, creds: creds}
     end
 
-    test "정상 응답에서 {:ok, %Turn{}}을 반환한다", %{emit: emit, creds: creds} do
-      final = %Assistant{content: [{:text, "answer"}], usage: Usage.empty()}
-      Process.put(:fake_router_response, ok_stream(final))
+    test "users는 빈 리스트로 시작한다 (1차엔 steering/follow_up이 없으므로)", %{emit: emit, creds: creds} do
+      Process.put(:fake_router_response, ok_stream(%Assistant{}))
 
       job = build_job(creds)
 
-      assert {:ok, %Turn{index: 1, injected: [], assistant: ^final, tool_results: []}} =
+      assert {:ok, %Turn{index: 1, users: [], tool_results: []}} =
                Turn.take(job, [], emit)
     end
 
@@ -209,20 +208,25 @@ defmodule Pado.Agent.TurnTest do
       assert_received {:fake_router_called, %{ctx: %Context{messages: ^base_msgs}}}
     end
 
-    test "prev_turns가 있으면 base 뒤에 flatten된 메시지가 이어진다", %{
+    test "prev_turns가 있으면 base 뒤에 as_llm_messages가 이어진다", %{
       emit: emit,
       creds: creds
     } do
       Process.put(:fake_router_response, ok_stream(%Assistant{}))
 
       base_msgs = [User.new("first")]
-      prev_assistant = %Assistant{content: [{:text, "answer1"}]}
-      prev_turn = %Turn{index: 1, assistant: prev_assistant, tool_results: []}
+
+      prev_turn = %Turn{
+        index: 1,
+        users: [],
+        assistant: %Assistant{content: [{:text, "answer1"}]},
+        tool_results: []
+      }
 
       job = build_job(creds, context: Context.new(messages: base_msgs))
       Turn.take(job, [prev_turn], emit)
 
-      expected = base_msgs ++ Turn.flatten(prev_turn)
+      expected = base_msgs ++ Turn.as_llm_messages(prev_turn)
       assert_received {:fake_router_called, %{ctx: %Context{messages: ^expected}}}
     end
 
