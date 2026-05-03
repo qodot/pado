@@ -196,7 +196,7 @@ defmodule Pado.Agent.TurnTest do
       assert {:ok, %Job{turns: [%Turn{usage: ^usage}]}} = Turn.take(job, emit)
     end
 
-    test "router.stream에 job.tools의 definition 목록이 ctx.tools로 전달된다", %{
+    test "router.stream에 job.tools의 schema 목록이 ctx.tools로 전달된다", %{
       emit: emit,
       creds: creds
     } do
@@ -207,7 +207,7 @@ defmodule Pado.Agent.TurnTest do
       job = build_job(creds, tools: [tool_a, tool_b])
       Turn.take(job, emit)
 
-      expected = [tool_a.definition, tool_b.definition]
+      expected = [tool_a.schema, tool_b.schema]
       assert_received {:fake_router_called, %{ctx: %Context{tools: ^expected}}}
     end
 
@@ -472,7 +472,7 @@ defmodule Pado.Agent.TurnTest do
 
   defp make_tool(name, execute) do
     %Tool{
-      definition: LLMTool.new(name, "테스트 도구", %{}),
+      schema: LLMTool.new(name, "테스트 도구", %{}),
       execute: execute
     }
   end
