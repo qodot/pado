@@ -2,6 +2,7 @@ defmodule Pado.Agent.Job do
   alias Pado.Agent.{Tool, Turn}
   alias Pado.LLM.{Context, Message, Model}
   alias Pado.LLM.Credential.OAuth.Credentials
+  alias Pado.LLM.Tool, as: LLMTool
 
   @type credential_fun :: (-> {:ok, Credentials.t()} | {:error, term()})
 
@@ -33,5 +34,10 @@ defmodule Pado.Agent.Job do
   @spec llm_messages(t()) :: [Message.t()]
   def llm_messages(%__MODULE__{} = job) do
     job.context.messages ++ Enum.flat_map(job.turns, &Turn.as_llm_messages/1)
+  end
+
+  @spec llm_tools(t()) :: [LLMTool.t()]
+  def llm_tools(%__MODULE__{} = job) do
+    Enum.map(job.tools, & &1.schema)
   end
 end

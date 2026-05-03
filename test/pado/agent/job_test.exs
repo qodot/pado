@@ -6,6 +6,28 @@ defmodule Pado.Agent.JobTest do
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
+  describe "llm_tools/1" do
+    test "job.tools에서 schema만 순서대로 추출" do
+      tool_a = %Pado.Agent.Tool{
+        schema: Pado.LLM.Tool.new("search", "d", %{}),
+        execute: fn _, _ -> "a" end
+      }
+
+      tool_b = %Pado.Agent.Tool{
+        schema: Pado.LLM.Tool.new("fetch", "d", %{}),
+        execute: fn _, _ -> "b" end
+      }
+
+      job = %{build_job() | tools: [tool_a, tool_b]}
+      assert Job.llm_tools(job) == [tool_a.schema, tool_b.schema]
+    end
+
+    test "tools가 비어 있으면 빈 리스트" do
+      job = build_job()
+      assert Job.llm_tools(job) == []
+    end
+  end
+
   describe "llm_messages/1" do
     test "turns가 비어 있으면 base context messages 그대로" do
       base = [User.new("first")]

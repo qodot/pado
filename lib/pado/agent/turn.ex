@@ -31,8 +31,7 @@ defmodule Pado.Agent.Turn do
     users = []
 
     msgs = Job.llm_messages(job) ++ users
-    router_tools = Enum.map(job.tools, & &1.schema)
-    ctx = %{job.context | messages: msgs, tools: router_tools}
+    ctx = %{job.context | messages: msgs, tools: Job.llm_tools(job)}
 
     with {:ok, creds} <- job.credential_fun.(),
          {:ok, stream} <-
