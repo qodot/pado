@@ -18,10 +18,14 @@ cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 
 ```elixir
 Mix.install(
-  [{:pado_kino, path: Path.expand("..", __DIR__)}],
+  [
+    {:pado, path: Path.expand("../../pado", __DIR__)},
+    {:pado_kino, path: Path.expand("..", __DIR__)}
+  ],
   force: true
 )
 
+alias Pado.Agent.LLM
 alias Pado.LLM.Catalog.OpenAICodex
 alias Pado.LLM.Credential.FileLoader
 alias Pado.LLM.Message.User
