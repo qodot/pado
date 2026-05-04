@@ -2,7 +2,8 @@ defmodule Pado.AgentTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent
-  alias Pado.Agent.{Job, Tool, Turn}
+  alias Pado.Agent.{Job, Turn}
+  alias Pado.Agent.Tools.Tool
   alias Pado.LLM.{Model, Usage}
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}

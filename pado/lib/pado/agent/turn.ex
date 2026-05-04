@@ -1,6 +1,7 @@
 defmodule Pado.Agent.Turn do
   alias Pado.Agent
-  alias Pado.Agent.{Event, Job, Tool}
+  alias Pado.Agent.{Event, Job}
+  alias Pado.Agent.Tools.Tool
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult}
   alias Pado.LLM.Usage

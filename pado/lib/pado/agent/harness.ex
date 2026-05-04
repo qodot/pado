@@ -1,5 +1,5 @@
 defmodule Pado.Agent.Harness do
-  alias Pado.Agent.Tool
+  alias Pado.Agent.Tools.Tool
 
   @type t :: %__MODULE__{
           system_prompt: String.t() | nil,
