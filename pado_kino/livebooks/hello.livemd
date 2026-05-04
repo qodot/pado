@@ -30,8 +30,7 @@ agent = %Pado.Agent{
   llm: %Pado.Agent.LLM{
     provider: :openai_codex,
     credentials: creds,
-    model: OpenAICodex.default(),
-    opts: [reasoning_effort: :medium]
+    model: OpenAICodex.default()
   },
   harness: %Pado.Agent.Harness{tools: [Pado.Agent.Tools.Bash.tool(timeout: 10)]}
 }
@@ -53,22 +52,30 @@ model_input =
     default: Pado.LLM.Catalog.OpenAICodex.default().id
   )
 
+effort_input =
+  Kino.Input.select(
+    "효과",
+    [{:none, "none"}, {:low, "low"}, {:medium, "medium"}, {:high, "high"}, {:xhigh, "xhigh"}],
+    default: :medium
+  )
+
 input = Kino.Input.textarea("메시지")
 
 form =
   Kino.Control.form(
-    [model: model_input, prompt: input],
+    [model: model_input, effort: effort_input, prompt: input],
     submit: "보내기",
     reset_on_submit: [:prompt]
   )
 
 # 5. 입력 처리
-Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
+Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} ->
   text = String.trim(text)
 
   if text != "" do
     model = Pado.LLM.Catalog.OpenAICodex.get(model_id)
-    current_agent = %{agent | llm: %{agent.llm | model: model}}
+    opts = Keyword.put(agent.llm.opts, :reasoning_effort, effort)
+    current_agent = %{agent | llm: %{agent.llm | model: model, opts: opts}}
 
     msgs0 = Elixir.Agent.get(state_pid, & &1) ++ [User.new(text)]
     Kino.Frame.append(chat_frame, Kino.Markdown.new("**🙂 나**\n\n" <> text))
