@@ -54,4 +54,47 @@ defmodule Pado.Agent.Tools.BashTest do
       assert result == "Command timed out after 1 seconds"
     end
   end
+
+  describe "execute / 출력 truncation" do
+    test "짧은 출력은 그대로 반환된다 (notice 없음)" do
+      %AgentTool{execute: execute} = Bash.tool()
+      result = execute.(%{"command" => "echo hello"}, %{})
+
+      refute result =~ "Showing last"
+      refute result =~ "Full output:"
+    end
+
+    test "200줄 넘는 출력은 마지막 부분만 보내고 안내가 붙는다" do
+      %AgentTool{execute: execute} = Bash.tool()
+
+      result =
+        execute.(
+          %{"command" => "for i in $(seq 1 250); do echo line$i; done"},
+          %{}
+        )
+
+      assert result =~ "line250"
+      refute result =~ "line1\n"
+      assert result =~ "Showing last"
+      assert result =~ "of 251 lines"
+      assert result =~ "Full output:"
+    end
+
+    test "잘릴 때 전체 출력은 임시파일에 저장된다" do
+      %AgentTool{execute: execute} = Bash.tool()
+
+      result =
+        execute.(
+          %{"command" => "for i in $(seq 1 250); do echo line$i; done"},
+          %{}
+        )
+
+      [_, path] = Regex.run(~r{Full output: ([^\s\]]+)}, result)
+      assert File.exists?(path)
+      full = File.read!(path)
+      assert String.contains?(full, "line1\n")
+      assert String.contains?(full, "line250\n")
+      File.rm!(path)
+    end
+  end
 end
