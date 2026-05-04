@@ -30,7 +30,8 @@ agent = %Pado.Agent{
   llm: %Pado.Agent.LLM{
     provider: :openai_codex,
     credentials: creds,
-    model: OpenAICodex.default()
+    model: OpenAICodex.default(),
+    opts: [reasoning_effort: :medium]
   },
   harness: %Pado.Agent.Harness{tools: [Pado.Agent.Tools.Bash.tool(timeout: 10)]}
 }
