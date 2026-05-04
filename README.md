@@ -1,6 +1,9 @@
-# Pado 모노레포
+# Pado
 
-`pado`(한국어로 wave라는 뜻이고 발음은 '파도'입니다)는 [pi](https://github.com/badlogic/pi-mono)와 [jido](https://github.com/agentjido/jido)에서 영감을 받은 에이전트 런타임 및 하네스 라이브러리입니다.
+<img width="1254" height="1254" alt="pado" src="https://github.com/user-attachments/assets/1609ee6d-6420-4add-9e2a-30b791917248" />
+
+
+`pado`(한국어로 wave라는 뜻이고 발음은 '파도'입니다)는 [pi](https://github.com/badlogic/pi-mono)와 [jido](https://github.com/agentjido/jido)에서 영감을 받은(합쳐서 pado) 에이전트 런타임 및 하네스 라이브러리입니다.
 
 이 저장소는 `pado`와 그 주변 패키지를 한곳에 모아 함께 키우는 모노레포입니다. 처음 오신 분은 [`pado/`](pado) 패키지의 README부터 읽어보시기 바랍니다. 라이브러리 사용법과 현재 구현 상태가 거기에 정리되어 있습니다.
 
