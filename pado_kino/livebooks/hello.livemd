@@ -87,35 +87,59 @@ Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
       |> Enum.join("\n")
     end
 
-    {_frame, _buf, final_msgs} =
+    render_reply = fn frame, thinking, text ->
+      thinking_block =
+        if thinking == "" do
+          ""
+        else
+          "> 💭 " <> String.replace(thinking, "\n", "\n> ") <> "\n\n"
+        end
+
+      Kino.Frame.render(
+        frame,
+        Kino.Markdown.new("**🤖 봇**\n\n" <> thinking_block <> text)
+      )
+    end
+
+    ensure_frame = fn frame ->
+      case frame do
+        nil ->
+          f = Kino.Frame.new()
+          Kino.Frame.append(chat_frame, f)
+          f
+
+        f ->
+          f
+      end
+    end
+
+    {_frame, _tbuf, _buf, final_msgs} =
       Pado.Agent.stream(current_agent, job)
-      |> Enum.reduce({nil, "", msgs0}, fn
-        {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, {frame, buf, ms} ->
-          {frame, buf} =
-            case frame do
-              nil ->
-                f = Kino.Frame.new()
-                Kino.Frame.append(chat_frame, f)
-                {f, ""}
+      |> Enum.reduce({nil, "", "", msgs0}, fn
+        {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
+        {frame, tbuf, buf, ms} ->
+          frame = ensure_frame.(frame)
+          new_tbuf = tbuf <> d
+          render_reply.(frame, new_tbuf, buf)
+          {frame, new_tbuf, buf, ms}
 
-              f ->
-                {f, buf}
-            end
+        {:message_update, %{llm_event: {:text_delta, %{delta: d}}}},
+        {frame, tbuf, buf, ms} ->
+          frame = ensure_frame.(frame)
+          new_buf = buf <> d
+          render_reply.(frame, tbuf, new_buf)
+          {frame, tbuf, new_buf, ms}
 
-          buf = buf <> d
-          Kino.Frame.render(frame, Kino.Markdown.new("**🤖 봇**\n\n" <> buf))
-          {frame, buf, ms}
-
-        {:tool_execution_start, %{tool_name: name, args: args}}, {_frame, _buf, ms} ->
+        {:tool_execution_start, %{tool_name: name, args: args}}, {_frame, _tbuf, _buf, ms} ->
           block =
             "**🔧 " <> name <> "**\n\n" <>
               "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
 
           Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-          {nil, "", ms}
+          {nil, "", "", ms}
 
         {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}},
-        {_frame, _buf, ms} ->
+        {_frame, _tbuf, _buf, ms} ->
           emoji = if is_error, do: "⚠️", else: "📤"
           output = tool_result_text.(result)
 
@@ -124,11 +148,11 @@ Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
               "```\n" <> output <> "\n```"
 
           Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-          {nil, "", ms}
+          {nil, "", "", ms}
 
-        {:job_end, %{turns: turns}}, {frame, buf, ms} ->
+        {:job_end, %{turns: turns}}, {frame, tbuf, buf, ms} ->
           new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
-          {frame, buf, new_ms}
+          {frame, tbuf, buf, new_ms}
 
         _other, acc ->
           acc
