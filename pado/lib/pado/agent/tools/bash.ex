@@ -12,7 +12,7 @@ defmodule Pado.Agent.Tools.Bash do
   """
 
   def tool(opts \\ []) do
-    default_timeout = Keyword.get(opts, :timeout, @default_timeout_seconds)
+    timeout = Keyword.get(opts, :timeout, @default_timeout_seconds)
 
     %AgentTool{
       schema:
@@ -34,13 +34,13 @@ defmodule Pado.Agent.Tools.Bash do
             "required" => ["command"]
           }
         ),
-      execute: fn args, ctx -> execute(args, ctx, default_timeout) end
+      execute: fn args, ctx -> execute(args, ctx, timeout) end
     }
   end
 
-  defp execute(%{"command" => cmd} = args, _ctx, default_timeout) when is_binary(cmd) do
-    timeout_seconds = Map.get(args, "timeout", default_timeout)
-    timeout_ms = timeout_seconds * 1000
+  defp execute(%{"command" => cmd} = args, _ctx, timeout) when is_binary(cmd) do
+    timeout = Map.get(args, "timeout", timeout)
+    timeout_ms = timeout * 1000
 
     task = Task.async(fn -> System.shell(cmd, stderr_to_stdout: true) end)
 
@@ -49,7 +49,7 @@ defmodule Pado.Agent.Tools.Bash do
         "exit_code: #{exit_code}\n#{output}"
 
       nil ->
-        "Command timed out after #{timeout_seconds} seconds"
+        "Command timed out after #{timeout} seconds"
     end
   end
 end
