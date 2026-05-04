@@ -21,12 +21,11 @@ mix pado.llm.login --output ~/.config/pado/openai_codex.json
 이 셀은 노트북당 한 번만 실행하면 된다.
 
 ```elixir
-Mix.install([
-  {:pado_kino, path: Path.expand("..", __DIR__)}
-])
+Mix.install(
+  [{:pado_kino, path: Path.expand("..", __DIR__)}],
+  force: true
+)
 
-alias Pado.Agent
-alias Pado.Agent.{Harness, Job, LLM, Turn}
 alias Pado.LLM.Catalog.OpenAICodex
 alias Pado.LLM.Credential.FileLoader
 alias Pado.LLM.Message.User
@@ -36,13 +35,13 @@ creds_path = Path.expand("~/.config/pado/openai_codex.json")
 {:ok, creds} = FileLoader.load(creds_path)
 
 # 2. 에이전트와 세션
-agent = %Agent{
-  llm: %LLM{
+agent = %Pado.Agent{
+  llm: %Pado.Agent.LLM{
     provider: :openai_codex,
     credentials: creds,
     model: OpenAICodex.default()
   },
-  harness: %Harness{tools: []}
+  harness: %Pado.Agent.Harness{tools: []}
 }
 
 session_id = "session-#{System.unique_integer([:positive])}"
@@ -66,14 +65,14 @@ Kino.listen(form, fn %{data: %{prompt: text}} ->
     reply_frame = Kino.Frame.new()
     Kino.Frame.append(chat_frame, reply_frame)
 
-    job = %Job{
+    job = %Pado.Agent.Job{
       messages: msgs0,
       session_id: session_id,
       job_id: "job-#{System.unique_integer([:positive])}"
     }
 
     {_buf, final_msgs} =
-      Agent.stream(agent, job)
+      Pado.Agent.stream(agent, job)
       |> Enum.reduce({"", msgs0}, fn
         {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, {buf, ms} ->
           buf = buf <> d
@@ -81,7 +80,7 @@ Kino.listen(form, fn %{data: %{prompt: text}} ->
           {buf, ms}
 
         {:job_end, %{turns: turns}}, {buf, ms} ->
-          new_ms = ms ++ Enum.flat_map(turns, &Turn.as_llm_messages/1)
+          new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
           {buf, new_ms}
 
         _other, acc ->
@@ -97,10 +96,6 @@ end)
 
 ## 채팅 UI
 
-위 셋업이 끝났다면 이 셀을 한 번 실행해 채팅창을 띄운다. `chat_frame`은
-대화 내역이 위에서 아래로 누적되는 영역, `form`은 새 메시지를 보내는
-입력창이다.
-
 ```elixir
 Kino.Layout.grid([chat_frame, form], boxed: true)
 ```
@@ -110,7 +105,5 @@ Kino.Layout.grid([chat_frame, form], boxed: true)
 * 대화 상태는 `state_pid`(Elixir Agent)에 누적되며, 매 턴이 끝날 때
   직전 `Job.turns`을 LLM 메시지로 풀어 다음 Job의 messages에 이어 붙인다.
 * 도구 호출(`tool_execution_*`), 턴 경계(`turn_start/end`)는 이 노트북에서
-  화면에 표시하지 않는다. 표시가 필요해지면 `Kino.listen` 콜백 안의
-  `Enum.reduce` 패턴 매치에 case를 더 추가하면 된다.
+  화면에 표시하지 않는다.
 * 셋업 셀을 다시 실행하면 새 `state_pid`가 생기고 이전 대화는 잊혀진다.
-  대화를 초기화하고 싶을 때 같은 방식으로 활용한다.
