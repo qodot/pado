@@ -1,24 +1,16 @@
-# The directory Mix will write compiled artifacts to.
-/_build/
+# Mix가 패키지별로 만드는 산출물.
+_build/
+cover/
+deps/
+doc/
+tmp/
 
-# If you run "mix test --cover", coverage assets end up here.
-/cover/
-
-# The directory Mix downloads your dependencies sources to.
-/deps/
-
-# Where third-party dependencies like ExDoc output generated docs.
-/doc/
-
-# Temporary files, for example, from tests.
-/tmp/
-
-# If the VM crashes, it generates a dump, let's ignore it too.
+# VM 크래시 덤프.
 erl_crash.dump
 
-# Also ignore archive artifacts (built via "mix archive.build").
+# Mix archive 산출물.
 *.ez
 
-# Ignore package tarball (built via "mix hex.build").
-llm_router-*.tar
+# hex.build 산출물.
+*-*.tar
 
