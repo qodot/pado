@@ -17,13 +17,10 @@ cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 이 셀은 노트북당 한 번만 실행하면 된다.
 
 ```elixir
-Mix.install(
-  [
-    {:pado, path: Path.expand("../../pado", __DIR__)},
-    {:pado_kino, path: Path.expand("..", __DIR__)}
-  ],
-  force: true
-)
+Mix.install([
+  {:pado, path: Path.expand("../../pado", __DIR__)},
+  {:pado_kino, path: Path.expand("..", __DIR__)}
+])
 
 alias Pado.Agent.LLM
 alias Pado.LLM.Catalog.OpenAICodex
