@@ -2,7 +2,7 @@ defmodule Pado.Agent do
   alias Pado.Agent.{Event, Harness, Job, LLM, Turn}
   alias Pado.LLM.Context, as: LLMContext
 
-  @type emit_fun :: (Event.t() -> any())
+  @type send_event_fun :: (Event.t() -> any())
 
   @type t :: %__MODULE__{
           name: String.t() | nil,
@@ -28,11 +28,11 @@ defmodule Pado.Agent do
     }
   end
 
-  @spec loop(t(), Job.t()) :: Enumerable.t()
-  def loop(%__MODULE__{} = agent, %Job{} = job) do
+  @spec stream(t(), Job.t()) :: Enumerable.t()
+  def stream(%__MODULE__{} = agent, %Job{} = job) do
     Stream.resource(
       fn -> start_worker(agent, job) end,
-      &pop_event/1,
+      &receive_event/1,
       &cleanup/1
     )
   end
@@ -40,14 +40,14 @@ defmodule Pado.Agent do
   defp start_worker(agent, %Job{} = job) do
     owner = self()
     ref = make_ref()
-    emit = fn ev -> send(owner, {ref, ev}) end
+    send_event = fn event -> send(owner, {ref, event}) end
 
     worker =
       Task.async(fn ->
-        emit.({:job_start, %{job_id: job.job_id}})
-        {final_job, status, reason} = run_loop(agent, job, emit)
+        send_event.({:job_start, %{job_id: job.job_id}})
+        {final_job, status, reason} = loop(agent, job, send_event)
 
-        emit.(
+        send_event.(
           {:job_end,
            %{
              job_id: final_job.job_id,
@@ -61,15 +61,15 @@ defmodule Pado.Agent do
     %{ref: ref, worker: worker, halted: false}
   end
 
-  defp pop_event(%{halted: true} = state), do: {:halt, state}
+  defp receive_event(%{halted: true} = state), do: {:halt, state}
 
-  defp pop_event(%{ref: ref} = state) do
+  defp receive_event(%{ref: ref} = state) do
     receive do
-      {^ref, ev} ->
-        if Event.terminal?(ev) do
-          {[ev], %{state | halted: true}}
+      {^ref, event} ->
+        if Event.terminal?(event) do
+          {[event], %{state | halted: true}}
         else
-          {[ev], state}
+          {[event], state}
         end
     end
   end
@@ -79,23 +79,22 @@ defmodule Pado.Agent do
     :ok
   end
 
-  @doc false
-  @spec run_loop(t(), Job.t(), emit_fun) :: {Job.t(), Event.status(), term() | nil}
-  def run_loop(%__MODULE__{} = agent, %Job{} = job, emit) do
+  @spec loop(t(), Job.t(), send_event_fun) :: {Job.t(), Event.status(), term() | nil}
+  def loop(%__MODULE__{} = agent, %Job{} = job, send_event) do
     index = length(job.turns) + 1
-    emit.({:turn_start, %{job_id: job.job_id, turn_index: index}})
+    send_event.({:turn_start, %{job_id: job.job_id, turn_index: index}})
 
-    case Turn.take(agent, job, emit) do
+    case Turn.take(agent, job, send_event) do
       {:ok, job} ->
-        emit.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
+        send_event.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
 
         case Job.next_step(job) do
-          :continue -> run_loop(agent, job, emit)
+          :continue -> loop(agent, job, send_event)
           status -> {job, status, nil}
         end
 
       {:error, %Job{} = job} ->
-        emit.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
+        send_event.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
         reason = List.last(job.turns).assistant.error_message
         {job, :error, reason}
 
