@@ -12,6 +12,7 @@ defmodule Pado.Agent.Tools.BashTest do
       assert schema.name == "bash"
       assert schema.parameters["required"] == ["command"]
       assert schema.parameters["properties"]["command"]["type"] == "string"
+      assert schema.parameters["properties"]["timeout"]["type"] == "integer"
     end
   end
 
@@ -37,6 +38,20 @@ defmodule Pado.Agent.Tools.BashTest do
 
       assert result =~ "exit_code: 0"
       assert result =~ "err"
+    end
+
+    test "args의 timeout을 넘기면 그 시간 안에 끝나지 않는 명령은 잘린다" do
+      %AgentTool{execute: execute} = Bash.tool()
+      result = execute.(%{"command" => "sleep 5", "timeout" => 1}, %{})
+
+      assert result == "Command timed out after 1 seconds"
+    end
+
+    test "factory의 :timeout 기본값을 override할 수 있다" do
+      %AgentTool{execute: execute} = Bash.tool(timeout: 1)
+      result = execute.(%{"command" => "sleep 5"}, %{})
+
+      assert result == "Command timed out after 1 seconds"
     end
   end
 end
