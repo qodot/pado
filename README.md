@@ -9,7 +9,7 @@
 
 ## 패키지
 
-- [`pado/`](pado) — 핵심 라이브러리입니다. (현재 유일한 패키지)
+- [`pado/`](pado) — 에이전트 백엔드 라이브러리 + 런타임입니다.
 - `pado_kino/` *(예정)* — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼입니다.
 - `pado_web/` *(예정)* — Phoenix LiveView 위에서 Pado 에이전트를 사용자 세션으로 띄우기 위한 바인딩입니다.
 
