@@ -10,7 +10,7 @@
 ## 패키지
 
 - [`pado/`](pado) — 에이전트 백엔드 라이브러리 + 런타임입니다.
-- `pado_kino/` *(예정)* — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼입니다.
+- [`pado_kino/`](pado_kino) — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼와 예제 노트북 모음입니다.
 - `pado_web/` *(예정)* — Phoenix LiveView 위에서 Pado 에이전트를 사용자 세션으로 띄우기 위한 바인딩입니다.
 
 ## 빠른 시작
@@ -22,6 +22,22 @@ mix test
 ```
 
 각 패키지는 자기 디렉토리 안에서 `mix` 명령을 돌립니다.
+
+## Livebook으로 띄워 보기
+
+[`pado_kino`](pado_kino)는 `pado`를 Livebook 위에서 실험할 수 있게 묶어 놓은 패키지입니다. `pado` + `kino`를 의존성으로 끌어오고, 바로 열 수 있는 예제 노트북을 함께 제공합니다.
+
+현재 들어 있는 노트북:
+
+- [`pado_kino/livebooks/pado_chat.livemd`](pado_kino/livebooks/pado_chat.livemd) — Pado 에이전트와 대화하는 채팅 UI 노트북입니다.
+
+Livebook이 설치되어 있다면 다음과 같이 엽니다.
+
+```bash
+livebook server pado_kino/livebooks/pado_chat.livemd
+```
+
+노트북은 `Mix.install`로 같은 저장소의 `pado`와 `pado_kino`를 경로 의존성으로 가져오므로, 저장소를 클론한 상태에서 그대로 동작합니다. OpenAI Codex 등 OAuth가 필요한 프로바이더는 노트북 안내에 따라 미리 `mix pado.llm.login`으로 크레덴셜을 만들어 두면 됩니다.
 
 ## 작업 규칙
 
