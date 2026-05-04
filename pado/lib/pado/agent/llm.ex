@@ -18,4 +18,18 @@ defmodule Pado.Agent.LLM do
     router: Application.compile_env(:pado, :router, Pado.LLM),
     opts: []
   ]
+
+  @spec normalize_opts(keyword()) :: keyword()
+  def normalize_opts(opts) do
+    case Keyword.fetch(opts, :reasoning_effort) do
+      :error ->
+        opts
+
+      {:ok, :none} ->
+        Keyword.delete(opts, :reasoning_effort)
+
+      {:ok, effort} when effort in [:low, :medium, :high, :xhigh] ->
+        Keyword.put(opts, :reasoning_effort, Atom.to_string(effort))
+    end
+  end
 end

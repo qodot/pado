@@ -1,6 +1,6 @@
 defmodule Pado.Agent.Turn do
   alias Pado.Agent
-  alias Pado.Agent.{Event, Job}
+  alias Pado.Agent.{Event, Job, LLM}
   alias Pado.Agent.Tools.Tool
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult}
@@ -36,7 +36,7 @@ defmodule Pado.Agent.Turn do
              Agent.llm_context(agent, job),
              llm.credentials,
              job.session_id,
-             normalize_opts(llm.opts)
+             LLM.normalize_opts(llm.opts)
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, send_event) do
       tool_results = dispatch_tools(agent, job, assistant, turn_index, send_event)
@@ -63,19 +63,6 @@ defmodule Pado.Agent.Turn do
         turn = build_turn(turn_index, assistant, [])
         send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
-    end
-  end
-
-  defp normalize_opts(opts) do
-    case Keyword.fetch(opts, :reasoning_effort) do
-      :error ->
-        opts
-
-      {:ok, :none} ->
-        Keyword.delete(opts, :reasoning_effort)
-
-      {:ok, effort} when effort in [:low, :medium, :high, :xhigh] ->
-        Keyword.put(opts, :reasoning_effort, Atom.to_string(effort))
     end
   end
 
