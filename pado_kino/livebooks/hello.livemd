@@ -9,19 +9,11 @@ Mix.install([
 
 ## 인증
 
-OpenAI Codex OAuth 로그인을 먼저 해 둔다. 모노레포 루트에서:
-
 ```sh
 cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ```
 
-브라우저로 열린 페이지에서 로그인하면 위 경로에 크레덴셜이 저장된다.
-경로는 본인이 저장한 위치에 맞춰 아래 셀의 `creds_path`를 수정한다.
-
-## 설정
-
-크레덴셜, 에이전트, 대화 상태, 입력 처리까지 한 셀에서 끝낸다.
-이 셀은 노트북당 한 번만 실행하면 된다.
+## 에이전트 설정
 
 ```elixir
 alias Pado.Agent.LLM
@@ -60,7 +52,7 @@ model_input =
     default: Pado.LLM.Catalog.OpenAICodex.default().id
   )
 
-input = Kino.Input.textarea("메시지", default: "안녕! 한 줄로 자기소개 해줘.")
+input = Kino.Input.textarea("메시지")
 
 form =
   Kino.Control.form(
