@@ -23,13 +23,13 @@ defmodule Pado.Agent.Turn do
     users ++ [assistant] ++ tool_results
   end
 
-  @spec take(Agent.t(), Job.t(), send_event_fun) ::
-          {:ok, Job.t()} | {:error, Job.t()} | {:error, term()}
+  @spec take(Agent.t(), Job.t(), send_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
   def take(%Agent{} = agent, %Job{} = job, send_event) do
-    index = length(job.turns) + 1
+    turn_index = length(job.turns) + 1
     users = []
-
     llm = agent.llm
+
+    send_event.({:turn_start, %{job_id: job.job_id, turn_index: turn_index}})
 
     with {:ok, stream} <-
            llm.router.stream(
@@ -40,31 +40,31 @@ defmodule Pado.Agent.Turn do
              llm.opts
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, send_event) do
-      tool_results = dispatch_tools(agent, job, assistant, index, send_event)
+      tool_results = dispatch_tools(agent, job, assistant, turn_index, send_event)
+      turn = build_turn(turn_index, users, assistant, tool_results)
 
-      turn = %__MODULE__{
-        index: index,
-        users: users,
-        assistant: assistant,
-        tool_results: tool_results,
-        usage: assistant.usage
-      }
-
+      send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
       {:ok, %{job | turns: job.turns ++ [turn]}}
     else
       {:error, %Assistant{} = assistant} ->
-        turn = %__MODULE__{
-          index: index,
-          users: users,
-          assistant: assistant,
-          tool_results: [],
-          usage: assistant.usage
-        }
+        turn = build_turn(turn_index, users, assistant, [])
 
+        send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
 
       {:error, reason} ->
-        {:error, reason}
+        error_message =
+          case reason do
+            reason when is_binary(reason) -> reason
+            reason when is_atom(reason) -> Atom.to_string(reason)
+            _ -> inspect(reason)
+          end
+
+        assistant = %Assistant{stop_reason: :error, error_message: error_message}
+        turn = build_turn(turn_index, users, assistant, [])
+
+        send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
+        {:error, %{job | turns: job.turns ++ [turn]}}
     end
   end
 
@@ -109,7 +109,13 @@ defmodule Pado.Agent.Turn do
 
   defp finalize_consume(result), do: result
 
-  defp dispatch_tools(%Agent{} = agent, %Job{} = job, %Assistant{} = assistant, index, send_event) do
+  defp dispatch_tools(
+         %Agent{} = agent,
+         %Job{} = job,
+         %Assistant{} = assistant,
+         turn_index,
+         send_event
+       ) do
     assistant
     |> tool_calls()
     |> Enum.map(fn call ->
@@ -117,7 +123,7 @@ defmodule Pado.Agent.Turn do
         {:tool_execution_start,
          %{
            job_id: job.job_id,
-           turn_index: index,
+           turn_index: turn_index,
            tool_call_id: call.id,
            tool_name: call.name,
            args: call.args
@@ -130,7 +136,7 @@ defmodule Pado.Agent.Turn do
         {:tool_execution_end,
          %{
            job_id: job.job_id,
-           turn_index: index,
+           turn_index: turn_index,
            tool_call_id: call.id,
            tool_name: call.name,
            result: result,
@@ -173,5 +179,15 @@ defmodule Pado.Agent.Turn do
           e -> ToolResult.error(id, name, Exception.message(e))
         end
     end
+  end
+
+  defp build_turn(turn_index, users, %Assistant{} = assistant, tool_results) do
+    %__MODULE__{
+      index: turn_index,
+      users: users,
+      assistant: assistant,
+      tool_results: tool_results,
+      usage: assistant.usage
+    }
   end
 end

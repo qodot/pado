@@ -272,13 +272,34 @@ defmodule Pado.Agent.TurnTest do
                        }}
     end
 
-    test "router.stream이 {:error, _}를 반환하면 {:error, reason}을 반환한다", %{
+    test "router.stream이 {:error, _}를 반환하면 실패 turn을 반환한다", %{
       send_event: send_event,
       creds: creds
     } do
       Pado.Test.FakeLLM.put_response({:error, :network})
       {agent, job} = build_setup(creds)
-      assert {:error, :network} = Turn.take(agent, job, send_event)
+
+      assert {:error,
+              %Job{
+                turns: [
+                  %Turn{
+                    index: 1,
+                    assistant: %Assistant{stop_reason: :error, error_message: "network"}
+                  }
+                ]
+              }} = Turn.take(agent, job, send_event)
+
+      assert_received {:sent_event, {:turn_start, %{job_id: "j1", turn_index: 1}}}
+
+      assert_received {:sent_event,
+                       {:turn_end,
+                        %{
+                          job_id: "j1",
+                          turn: %Turn{
+                            index: 1,
+                            assistant: %Assistant{stop_reason: :error, error_message: "network"}
+                          }
+                        }}}
     end
 
     test "assistant가 tool_call을 요청하면 새 turn.tool_results에 순서대로 들어간다",

@@ -81,24 +81,15 @@ defmodule Pado.Agent do
 
   @spec loop(t(), Job.t(), send_event_fun) :: {Job.t(), Event.status(), term() | nil}
   def loop(%__MODULE__{} = agent, %Job{} = job, send_event) do
-    index = length(job.turns) + 1
-    send_event.({:turn_start, %{job_id: job.job_id, turn_index: index}})
-
     case Turn.take(agent, job, send_event) do
       {:ok, job} ->
-        send_event.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
-
         case Job.next_step(job) do
           :continue -> loop(agent, job, send_event)
           status -> {job, status, nil}
         end
 
       {:error, %Job{} = job} ->
-        send_event.({:turn_end, %{job_id: job.job_id, turn: List.last(job.turns)}})
         reason = List.last(job.turns).assistant.error_message
-        {job, :error, reason}
-
-      {:error, reason} ->
         {job, :error, reason}
     end
   end
