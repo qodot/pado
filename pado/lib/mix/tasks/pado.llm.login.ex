@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Pado.LLM.Login do
+defmodule Mix.Tasks.Pado.Llm.Login do
   use Mix.Task
 
   alias Pado.LLM.Credential
