@@ -1,5 +1,12 @@
 # Pado Agent — 채팅 노트북
 
+```elixir
+Mix.install([
+  {:pado, path: Path.expand("../../pado", __DIR__)},
+  {:pado_kino, path: Path.expand("..", __DIR__)}
+])
+```
+
 ## 인증
 
 OpenAI Codex OAuth 로그인을 먼저 해 둔다. 모노레포 루트에서:
@@ -13,15 +20,10 @@ cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 
 ## 설정
 
-의존성, 크레덴셜, 에이전트, 대화 상태, 입력 처리까지 한 셀에서 끝낸다.
+크레덴셜, 에이전트, 대화 상태, 입력 처리까지 한 셀에서 끝낸다.
 이 셀은 노트북당 한 번만 실행하면 된다.
 
 ```elixir
-Mix.install([
-  {:pado, path: Path.expand("../../pado", __DIR__)},
-  {:pado_kino, path: Path.expand("..", __DIR__)}
-])
-
 alias Pado.Agent.LLM
 alias Pado.LLM.Catalog.OpenAICodex
 alias Pado.LLM.Credential.FileLoader
