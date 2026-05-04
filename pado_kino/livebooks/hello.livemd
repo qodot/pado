@@ -1,0 +1,84 @@
+# Pado Agent — 첫 노트북
+
+Pado 에이전트를 Livebook에서 띄워, LLM 응답이 토큰 단위로 흘러오는 모습을
+그대로 화면에 그린다.
+
+## 사전 준비
+
+OpenAI Codex OAuth 로그인을 먼저 해 둔다. 모노레포 루트에서:
+
+```sh
+cd pado
+mix pado.llm.login --output ~/.config/pado/openai_codex.json
+```
+
+브라우저로 열린 페이지에서 로그인하면 위 경로에 크레덴셜이 저장된다.
+
+## 의존성 설치
+
+`pado_kino`는 path 의존이고, 그 안에서 `pado`와 `kino`가 같이 끌려 온다.
+
+```elixir
+Mix.install([
+  {:pado_kino, path: Path.expand("..", __DIR__)}
+])
+```
+
+## 크레덴셜 로드
+
+```elixir
+creds_path = Path.expand("~/.config/pado/openai_codex.json")
+{:ok, creds} = Pado.LLM.Credential.FileLoader.load(creds_path)
+```
+
+## 에이전트와 작업 만들기
+
+```elixir
+alias Pado.Agent
+alias Pado.Agent.{Harness, Job, LLM}
+alias Pado.LLM.Catalog.OpenAICodex
+alias Pado.LLM.Message.User
+
+agent = %Agent{
+  llm: %LLM{
+    provider: :openai_codex,
+    credentials: creds,
+    model: OpenAICodex.default()
+  },
+  harness: %Harness{tools: []}
+}
+
+job = %Job{
+  messages: [User.new("안녕! 한 줄로 자기소개 해줘.")],
+  session_id: System.unique_integer([:positive]) |> to_string(),
+  job_id: "demo-1"
+}
+```
+
+## 스트리밍 출력
+
+`Pado.Agent.stream/2`이 흘려주는 이벤트 중 텍스트 델타만 골라 하나의
+Frame에 누적한다. 다른 이벤트(`turn_start`, `tool_execution_*` 등)는
+이 노트북에서는 무시한다.
+
+```elixir
+frame = Kino.Frame.new()
+Kino.render(frame)
+
+Agent.stream(agent, job)
+|> Enum.reduce("", fn
+  {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, acc ->
+    new_acc = acc <> d
+    Kino.Frame.render(frame, Kino.Markdown.new(new_acc))
+    new_acc
+
+  _other, acc ->
+    acc
+end)
+```
+
+## 다음에 다뤄볼 것
+
+* `turn_start` / `turn_end`로 턴 경계 표시
+* `tool_execution_start` / `tool_execution_end`로 도구 호출 패널
+* follow-up 입력을 `Kino.Input`으로 받아 같은 세션을 이어가기
