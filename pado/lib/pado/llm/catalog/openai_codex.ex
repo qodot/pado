@@ -11,7 +11,7 @@ defmodule Pado.LLM.Catalog.OpenAICodex do
   @models %{
     "gpt-5.5" => %Model{
       id: "gpt-5.5",
-      name: "GPT-5.5",
+      name: "gpt-5.5",
       provider: @provider,
       base_url: @base_url,
       context_window: 272_000,
@@ -35,7 +35,7 @@ defmodule Pado.LLM.Catalog.OpenAICodex do
     },
     "gpt-5.4-mini" => %Model{
       id: "gpt-5.4-mini",
-      name: "GPT-5.4-Mini",
+      name: "gpt-5.4-mini",
       provider: @provider,
       base_url: @base_url,
       context_window: 272_000,
