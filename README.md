@@ -1,6 +1,6 @@
 # Pado
 
-<img width="1254" height="1254" alt="pado" src="https://github.com/user-attachments/assets/1609ee6d-6420-4add-9e2a-30b791917248" />
+<img width="600" height="600" alt="pado" src="https://github.com/user-attachments/assets/1609ee6d-6420-4add-9e2a-30b791917248" />
 
 
 `pado`(한국어로 wave라는 뜻이고 발음은 '파도'입니다)는 [pi](https://github.com/badlogic/pi-mono)와 [jido](https://github.com/agentjido/jido)에서 영감을 받은(합쳐서 pado) 에이전트 런타임 및 하네스 라이브러리입니다.
