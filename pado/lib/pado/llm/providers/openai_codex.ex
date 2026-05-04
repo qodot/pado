@@ -157,9 +157,9 @@ defmodule Pado.LLM.Providers.OpenAICodex do
         {:halt, %{s | halted: true}}
 
       {^ref, {:error, reason}} ->
-        {[stream_error_chunk("Finch 스트림 오류: #{inspect(reason)}")], %{s | halted: true}}
+        {[stream_error_chunk("Finch stream error: #{inspect(reason)}")], %{s | halted: true}}
     after
-      timeout -> {[stream_error_chunk("Finch 스트림 시간 초과")], %{s | halted: true}}
+      timeout -> {[stream_error_chunk("Finch stream timeout")], %{s | halted: true}}
     end
   end
 

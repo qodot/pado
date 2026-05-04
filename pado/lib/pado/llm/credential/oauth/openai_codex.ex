@@ -102,14 +102,17 @@ defmodule Pado.LLM.Credential.OAuth.OpenAICodex do
     case start_callback_server(state, opts) do
       {:ok, server} ->
         try do
-          notify_on_auth(callbacks, url, "브라우저 창이 열립니다. 로그인을 완료해주세요.")
+          notify_on_auth(callbacks, url, "Opening a browser window. Complete the login there.")
 
           case Callback.Server.await_code(server, timeout: timeout) do
             {:ok, _code} = ok ->
               ok
 
             {:error, reason} = err ->
-              Logger.debug("[openai-codex] 콜백 오류: #{inspect(reason)}, 프롬프트 폴백 시도")
+              Logger.debug(
+                "[openai-codex] callback error: #{inspect(reason)}, falling back to manual prompt"
+              )
+
               prompt_fallback(callbacks, state) || err
           end
         after
@@ -117,12 +120,14 @@ defmodule Pado.LLM.Credential.OAuth.OpenAICodex do
         end
 
       {:error, reason} ->
-        Logger.warning("[openai-codex] 콜백 서버 바인딩 실패(#{inspect(reason)}). 수동 붙여넣기 모드로 전환합니다.")
+        Logger.warning(
+          "[openai-codex] failed to bind callback server (#{inspect(reason)}); switching to manual paste mode"
+        )
 
         notify_on_auth(
           callbacks,
           url,
-          "브라우저에서 로그인을 완료한 뒤 리다이렉트된 URL을 붙여 넣어주세요."
+          "After completing login in the browser, paste the redirected URL back here."
         )
 
         case prompt_fallback(callbacks, state) do
@@ -155,7 +160,7 @@ defmodule Pado.LLM.Credential.OAuth.OpenAICodex do
   defp prompt_fallback(%{on_prompt: on_prompt} = _callbacks, expected_state)
        when is_function(on_prompt, 1) do
     case on_prompt.(%{
-           message: "인가 코드(또는 리다이렉트된 URL 전체)를 붙여넣어 주세요:",
+           message: "Paste the authorization code (or the full redirected URL):",
            allow_empty: false
          }) do
       {:ok, raw} ->

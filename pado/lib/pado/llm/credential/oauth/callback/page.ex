@@ -1,8 +1,8 @@
 defmodule Pado.LLM.Credential.OAuth.Callback.Page do
-  def success_html(message \\ "인증이 완료되었습니다. 이 창을 닫아도 됩니다.") do
+  def success_html(message \\ "Authentication complete. You can close this window.") do
     render(%{
-      title: "인증 성공",
-      heading: "인증 성공",
+      title: "Authentication successful",
+      heading: "Authentication successful",
       message: message,
       details: nil
     })
@@ -10,8 +10,8 @@ defmodule Pado.LLM.Credential.OAuth.Callback.Page do
 
   def error_html(message, details \\ nil) do
     render(%{
-      title: "인증 실패",
-      heading: "인증 실패",
+      title: "Authentication failed",
+      heading: "Authentication failed",
       message: message,
       details: details
     })
@@ -26,7 +26,7 @@ defmodule Pado.LLM.Credential.OAuth.Callback.Page do
 
     """
     <!doctype html>
-    <html lang="ko">
+    <html lang="en">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />

@@ -65,9 +65,9 @@ defmodule Pado.LLM.Credential.OAuth.Callback.Server do
     cond do
       not Code.ensure_loaded?(Bandit) ->
         raise """
-        Pado.LLM.Credential.OAuth.Callback.Server를 쓰려면 :bandit이 필요합니다.
+        Pado.LLM.Credential.OAuth.Callback.Server requires :bandit.
 
-        mix.exs에 다음을 추가하세요.
+        Add the following to your mix.exs deps:
 
             {:bandit, "~> 1.5"},
             {:plug, "~> 1.16"}
@@ -75,18 +75,18 @@ defmodule Pado.LLM.Credential.OAuth.Callback.Server do
 
       not Code.ensure_loaded?(Plug) ->
         raise """
-        Pado.LLM.Credential.OAuth.Callback.Server를 쓰려면 :plug이 필요합니다.
+        Pado.LLM.Credential.OAuth.Callback.Server requires :plug.
 
-        mix.exs에 다음을 추가하세요.
+        Add the following to your mix.exs deps:
 
             {:plug, "~> 1.16"}
         """
 
       not Code.ensure_loaded?(Pado.LLM.Credential.OAuth.Callback.Server.Plug) ->
         raise """
-        Pado.LLM.Credential.OAuth.Callback.Server.Plug가 컴파일되지 않았습니다.
-        컴파일 시점에 :plug이 없었을 가능성이 큽니다. 의존성을 다시
-        받고 재컴파일하세요.
+        Pado.LLM.Credential.OAuth.Callback.Server.Plug was not compiled.
+        :plug was likely missing at compile time. Re-fetch dependencies
+        and recompile.
         """
 
       true ->
@@ -121,14 +121,14 @@ if Code.ensure_loaded?(Plug) do
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, Page.error_html("state 값이 일치하지 않습니다."))
+          |> send_resp(400, Page.error_html("State value did not match."))
 
         is_nil(code) or code == "" ->
           send(parent, {ref, {:error, :missing_code}})
 
           conn
           |> put_resp_content_type("text/html; charset=utf-8")
-          |> send_resp(400, Page.error_html("인가 코드가 전달되지 않았습니다."))
+          |> send_resp(400, Page.error_html("Authorization code was not provided."))
 
         true ->
           send(parent, {ref, {:ok, code}})
@@ -142,7 +142,7 @@ if Code.ensure_loaded?(Plug) do
     def call(conn, _opts) do
       conn
       |> put_resp_content_type("text/html; charset=utf-8")
-      |> send_resp(404, Page.error_html("콜백 경로를 찾을 수 없습니다."))
+      |> send_resp(404, Page.error_html("Callback path not found."))
     end
   end
 end

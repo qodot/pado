@@ -33,7 +33,7 @@ defmodule Mix.Tasks.Pado.Llm.Login do
         write_output(creds, opts[:output])
 
       {:error, reason} ->
-        Mix.shell().error("로그인 실패: #{format_error(reason)}")
+        Mix.shell().error("Login failed: #{format_error(reason)}")
         exit({:shutdown, 1})
     end
   end
@@ -46,8 +46,8 @@ defmodule Mix.Tasks.Pado.Llm.Login do
         mod
 
       :error ->
-        Mix.shell().error("알 수 없는 프로바이더: #{alias_name}")
-        Mix.shell().info("사용 가능: #{Enum.join(Map.keys(@provider_aliases), ", ")}")
+        Mix.shell().error("Unknown provider: #{alias_name}")
+        Mix.shell().info("Available providers: #{Enum.join(Map.keys(@provider_aliases), ", ")}")
         exit({:shutdown, 1})
     end
   end
@@ -66,7 +66,7 @@ defmodule Mix.Tasks.Pado.Llm.Login do
       on_auth: fn %{url: url} = info ->
         instructions = Map.get(info, :instructions)
         Mix.shell().info("")
-        Mix.shell().info("아래 URL을 브라우저에서 열어주세요:")
+        Mix.shell().info("Open the following URL in your browser:")
         Mix.shell().info(url)
         if instructions, do: Mix.shell().info(instructions)
         Mix.shell().info("")
@@ -105,7 +105,7 @@ defmodule Mix.Tasks.Pado.Llm.Login do
   defp write_output(%Credentials{} = creds, nil) do
     case Credential.save(creds.provider, creds) do
       :ok ->
-        Mix.shell().info("크레덱셜을 :#{creds.provider} 매핑에 저장했습니다.")
+        Mix.shell().info("Saved credentials to the :#{creds.provider} mapping.")
 
       {:error, {:unconfigured_provider, _}} ->
         creds
@@ -125,7 +125,7 @@ defmodule Mix.Tasks.Pado.Llm.Login do
 
     _ = File.chmod(path, 0o600)
 
-    Mix.shell().info("크레덴셜을 #{path} 에 기록했습니다.")
+    Mix.shell().info("Wrote credentials to #{path}.")
   end
 
   defp format_error(reason) when is_atom(reason) or is_binary(reason), do: inspect(reason)
