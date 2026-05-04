@@ -2,13 +2,13 @@
 
 `pado`(한국어로 wave라는 뜻이고 발음은 '파도'입니다)는 [pi](https://github.com/badlogic/pi-mono)와 [jido](https://github.com/agentjido/jido)에서 영감을 받은 에이전트 런타임 및 하네스 라이브러리입니다.
 
-이 저장소는 `pado`와 그 주변 패키지를 한곳에 모아 함께 키우는 모노레포예요. 처음이시면 [`pado/`](pado) 패키지의 README부터 읽어보세요. 라이브러리 사용법과 현재 구현 상태가 거기에 정리되어 있습니다.
+이 저장소는 `pado`와 그 주변 패키지를 한곳에 모아 함께 키우는 모노레포입니다. 처음 오신 분은 [`pado/`](pado) 패키지의 README부터 읽어보시기 바랍니다. 라이브러리 사용법과 현재 구현 상태가 거기에 정리되어 있습니다.
 
 ## 패키지
 
-- [`pado/`](pado) — 핵심 라이브러리. (현재 유일한 패키지)
-- `pado_kino/` *(예정)* — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼.
-- `pado_web/` *(예정)* — Phoenix LiveView 위에서 Pado 에이전트를 사용자 세션으로 띄우기 위한 바인딩.
+- [`pado/`](pado) — 핵심 라이브러리입니다. (현재 유일한 패키지)
+- `pado_kino/` *(예정)* — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼입니다.
+- `pado_web/` *(예정)* — Phoenix LiveView 위에서 Pado 에이전트를 사용자 세션으로 띄우기 위한 바인딩입니다.
 
 ## 빠른 시작
 
@@ -22,11 +22,11 @@ mix test
 
 ## 작업 규칙
 
-저장소 전체에 적용되는 규칙은 [`AGENTS.md`](AGENTS.md)에 있습니다. 핵심만 추리면:
+저장소 전체에 적용되는 규칙은 [`AGENTS.md`](AGENTS.md)에 있습니다. 핵심만 추리면 다음과 같습니다.
 
-- 문서·주석·커밋 메시지는 한국어, 코드 식별자는 영어
-- `mix format`과 `mix compile --warnings-as-errors` 통과 필수
-- 한 커밋에 한 가지 맥락만
+- 문서·주석·커밋 메시지는 한국어, 코드 식별자는 영어로 씁니다.
+- `mix format`과 `mix compile --warnings-as-errors`를 반드시 통과해야 합니다.
+- 한 커밋에 한 가지 맥락만 담습니다.
 
 ## 라이선스
 
