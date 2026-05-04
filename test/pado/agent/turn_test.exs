@@ -9,8 +9,7 @@ defmodule Pado.Agent.TurnTest do
   alias Pado.LLM.Tool, as: LLMTool
 
   describe "as_llm_messages/1" do
-    test "users, assistant, tool_results를 시간순으로 펼친다" do
-      users = [User.new("X 해줘")]
+    test "assistant, tool_results를 시간순으로 펼친다" do
       assistant = %Assistant{content: [{:text, "ok"}]}
 
       tool_results = [
@@ -20,43 +19,14 @@ defmodule Pado.Agent.TurnTest do
 
       turn = %Turn{
         index: 1,
-        users: users,
         assistant: assistant,
         tool_results: tool_results
       }
 
-      assert Turn.as_llm_messages(turn) == users ++ [assistant] ++ tool_results
+      assert Turn.as_llm_messages(turn) == [assistant] ++ tool_results
     end
 
-    test "users가 비어 있으면 assistant + tool_results만" do
-      assistant = %Assistant{content: [{:text, "hi"}]}
-      tr = ToolResult.text("c1", "t", "r")
-
-      turn = %Turn{
-        index: 1,
-        users: [],
-        assistant: assistant,
-        tool_results: [tr]
-      }
-
-      assert Turn.as_llm_messages(turn) == [assistant, tr]
-    end
-
-    test "tool_results가 비어 있으면 users + assistant만" do
-      users = [User.new("X")]
-      assistant = %Assistant{content: [{:text, "y"}]}
-
-      turn = %Turn{
-        index: 1,
-        users: users,
-        assistant: assistant,
-        tool_results: []
-      }
-
-      assert Turn.as_llm_messages(turn) == users ++ [assistant]
-    end
-
-    test "users와 tool_results 둘 다 비어 있으면 assistant만" do
+    test "tool_results가 비어 있으면 assistant만" do
       assistant = %Assistant{content: [{:text, "only"}]}
 
       turn = %Turn{index: 1, assistant: assistant}
@@ -176,7 +146,7 @@ defmodule Pado.Agent.TurnTest do
       {agent, job} = build_setup(creds)
 
       assert {:ok, %Job{turns: turns}} = Turn.take(agent, job, send_event)
-      assert [%Turn{index: 1, users: [], tool_results: []}] = turns
+      assert [%Turn{index: 1, tool_results: []}] = turns
     end
 
     test "job.turns 길이 + 1 이 새 turn의 index가 된다", %{send_event: send_event, creds: creds} do
@@ -240,7 +210,6 @@ defmodule Pado.Agent.TurnTest do
 
       prev_turn = %Turn{
         index: 1,
-        users: [],
         assistant: %Assistant{content: [{:text, "answer1"}]},
         tool_results: []
       }

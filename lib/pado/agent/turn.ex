@@ -2,12 +2,11 @@ defmodule Pado.Agent.Turn do
   alias Pado.Agent
   alias Pado.Agent.{Event, Job, Tool}
   alias Pado.LLM.Message
-  alias Pado.LLM.Message.{Assistant, ToolResult, User}
+  alias Pado.LLM.Message.{Assistant, ToolResult}
   alias Pado.LLM.Usage
 
   @type t :: %__MODULE__{
           index: pos_integer(),
-          users: [User.t()],
           assistant: Assistant.t(),
           tool_results: [ToolResult.t()],
           usage: Usage.t() | nil
@@ -16,17 +15,16 @@ defmodule Pado.Agent.Turn do
   @type send_event_fun :: (Event.t() -> any())
 
   @enforce_keys [:index, :assistant]
-  defstruct [:index, :assistant, users: [], tool_results: [], usage: nil]
+  defstruct [:index, :assistant, tool_results: [], usage: nil]
 
   @spec as_llm_messages(t()) :: [Message.t()]
-  def as_llm_messages(%__MODULE__{users: users, assistant: assistant, tool_results: tool_results}) do
-    users ++ [assistant] ++ tool_results
+  def as_llm_messages(%__MODULE__{assistant: assistant, tool_results: tool_results}) do
+    [assistant] ++ tool_results
   end
 
   @spec take(Agent.t(), Job.t(), send_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
   def take(%Agent{} = agent, %Job{} = job, send_event) do
     turn_index = length(job.turns) + 1
-    users = []
     llm = agent.llm
 
     send_event.({:turn_start, %{job_id: job.job_id, turn_index: turn_index}})
@@ -41,14 +39,13 @@ defmodule Pado.Agent.Turn do
            ),
          {:ok, assistant} <- consume_llm_stream(stream, job.job_id, send_event) do
       tool_results = dispatch_tools(agent, job, assistant, turn_index, send_event)
-      turn = build_turn(turn_index, users, assistant, tool_results)
 
+      turn = build_turn(turn_index, assistant, tool_results)
       send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
       {:ok, %{job | turns: job.turns ++ [turn]}}
     else
       {:error, %Assistant{} = assistant} ->
-        turn = build_turn(turn_index, users, assistant, [])
-
+        turn = build_turn(turn_index, assistant, [])
         send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
 
@@ -61,8 +58,8 @@ defmodule Pado.Agent.Turn do
           end
 
         assistant = %Assistant{stop_reason: :error, error_message: error_message}
-        turn = build_turn(turn_index, users, assistant, [])
 
+        turn = build_turn(turn_index, assistant, [])
         send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
     end
@@ -181,10 +178,9 @@ defmodule Pado.Agent.Turn do
     end
   end
 
-  defp build_turn(turn_index, users, %Assistant{} = assistant, tool_results) do
+  defp build_turn(turn_index, %Assistant{} = assistant, tool_results) do
     %__MODULE__{
       index: turn_index,
-      users: users,
       assistant: assistant,
       tool_results: tool_results,
       usage: assistant.usage

@@ -75,7 +75,6 @@ defmodule Pado.Agent.JobTest do
 
       turn = %Turn{
         index: 1,
-        users: [],
         assistant: asst,
         tool_results: [tr]
       }
