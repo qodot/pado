@@ -1,5 +1,5 @@
 defmodule Pado.Agent do
-  alias Pado.Agent.{Event, Harness, Job, LLM, Turn}
+  alias Pado.Agent.{Event, Harness, Job, LLM, Tool, Turn}
   alias Pado.LLM.Context, as: LLMContext
 
   @type send_event_fun :: (Event.t() -> any())
@@ -24,7 +24,7 @@ defmodule Pado.Agent do
     %LLMContext{
       system_prompt: agent.harness.system_prompt,
       messages: Job.llm_messages(job),
-      tools: Enum.map(agent.harness.tools, & &1.schema)
+      tools: Enum.map(agent.harness.tools, &Tool.as_llm_tool/1)
     }
   end
 

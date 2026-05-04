@@ -10,4 +10,7 @@ defmodule Pado.Agent.Tool do
 
   @enforce_keys [:schema, :execute]
   defstruct [:schema, :execute]
+
+  @spec as_llm_tool(t()) :: RouterTool.t()
+  def as_llm_tool(%__MODULE__{schema: schema}), do: schema
 end
