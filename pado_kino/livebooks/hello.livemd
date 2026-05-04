@@ -52,13 +52,11 @@ model_input =
     default: Pado.LLM.Catalog.OpenAICodex.default().id
   )
 
-default_effort = :medium
-
 effort_input =
   Kino.Input.select(
     "효과",
     [{:none, "none"}, {:low, "low"}, {:medium, "medium"}, {:high, "high"}, {:xhigh, "xhigh"}],
-    default: default_effort
+    default: :medium
   )
 
 input = Kino.Input.textarea("메시지")
