@@ -136,9 +136,9 @@ defmodule Pado.LLM.Providers.OpenAICodex.Request do
       nil ->
         nil
 
-      effort ->
+      effort when is_binary(effort) ->
         %{
-          "effort" => Atom.to_string(effort),
+          "effort" => effort,
           "summary" => Keyword.get(opts, :reasoning_summary, "auto")
         }
     end

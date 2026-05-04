@@ -238,8 +238,18 @@ defmodule Pado.Agent.TurnTest do
                          model: %Model{id: "test"},
                          creds: ^creds,
                          session_id: "s1",
-                         opts: [reasoning_effort: :low]
+                         opts: [reasoning_effort: "low"]
                        }}
+    end
+
+    test "reasoning_effort :none은 opts에서 제거된다", %{send_event: send_event, creds: creds} do
+      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{}))
+
+      {agent, job} = build_setup(creds, llm_opts: [reasoning_effort: :none])
+      Turn.take(agent, job, send_event)
+
+      assert_received {:fake_router_called, %{opts: opts}}
+      refute Keyword.has_key?(opts, :reasoning_effort)
     end
 
     test "router.stream이 {:error, _}를 반환하면 실패 turn을 반환한다", %{

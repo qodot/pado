@@ -37,7 +37,7 @@ defmodule Pado.LLM.Providers.OpenAICodex.RequestTest do
 
     body =
       Request.build_body(@model, ctx, "session-1",
-        reasoning_effort: :low,
+        reasoning_effort: "low",
         temperature: 0.2
       )
 
