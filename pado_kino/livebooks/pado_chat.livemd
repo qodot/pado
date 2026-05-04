@@ -1,4 +1,4 @@
-# Pado Agent — 채팅 노트북
+# Pado Chat
 
 ```elixir
 Mix.install([
@@ -7,13 +7,13 @@ Mix.install([
 ])
 ```
 
-## 인증
+## Authenticate
 
 ```sh
 cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ```
 
-## 에이전트 설정
+## Configure Agent
 
 ````elixir
 alias Pado.Agent.LLM
@@ -173,7 +173,7 @@ end)
 :ok
 ````
 
-## 채팅 UI
+## Load UI
 
 ```elixir
 Kino.Layout.grid([chat_frame, form], boxed: true)
