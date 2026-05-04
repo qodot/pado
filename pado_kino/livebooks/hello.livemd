@@ -1,21 +1,17 @@
 # Pado Agent — 채팅 노트북
 
-맨 위에서 한 번에 의존성·크레덴셜·에이전트·UI를 셋업하고, 맨 아래
-영역에 대화가 무한히 누적되는 형태의 최소 채팅 UI.
-
-## 사전 준비
+## 인증
 
 OpenAI Codex OAuth 로그인을 먼저 해 둔다. 모노레포 루트에서:
 
 ```sh
-cd pado
-mix pado.llm.login --output ~/.config/pado/openai_codex.json
+cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ```
 
 브라우저로 열린 페이지에서 로그인하면 위 경로에 크레덴셜이 저장된다.
 경로는 본인이 저장한 위치에 맞춰 아래 셀의 `creds_path`를 수정한다.
 
-## 셋업
+## 설정
 
 의존성, 크레덴셜, 에이전트, 대화 상태, 입력 처리까지 한 셀에서 끝낸다.
 이 셀은 노트북당 한 번만 실행하면 된다.
@@ -51,14 +47,33 @@ session_id = "session-#{System.unique_integer([:positive])}"
 
 # 4. UI 위젯
 chat_frame = Kino.Frame.new()
+
+model_options =
+  Pado.LLM.Catalog.OpenAICodex.all()
+  |> Enum.map(fn m -> {m.id, m.name} end)
+
+model_input =
+  Kino.Input.select("모델", model_options,
+    default: Pado.LLM.Catalog.OpenAICodex.default().id
+  )
+
 input = Kino.Input.textarea("메시지", default: "안녕! 한 줄로 자기소개 해줘.")
-form = Kino.Control.form([prompt: input], submit: "보내기", reset_on_submit: [:prompt])
+
+form =
+  Kino.Control.form(
+    [model: model_input, prompt: input],
+    submit: "보내기",
+    reset_on_submit: [:prompt]
+  )
 
 # 5. 입력 처리
-Kino.listen(form, fn %{data: %{prompt: text}} ->
+Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
   text = String.trim(text)
 
   if text != "" do
+    model = Pado.LLM.Catalog.OpenAICodex.get(model_id)
+    current_agent = %{agent | llm: %{agent.llm | model: model}}
+
     msgs0 = Elixir.Agent.get(state_pid, & &1) ++ [User.new(text)]
     Kino.Frame.append(chat_frame, Kino.Markdown.new("**🙂 나**\n\n" <> text))
 
@@ -72,7 +87,7 @@ Kino.listen(form, fn %{data: %{prompt: text}} ->
     }
 
     {_buf, final_msgs} =
-      Pado.Agent.stream(agent, job)
+      Pado.Agent.stream(current_agent, job)
       |> Enum.reduce({"", msgs0}, fn
         {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, {buf, ms} ->
           buf = buf <> d
@@ -99,11 +114,3 @@ end)
 ```elixir
 Kino.Layout.grid([chat_frame, form], boxed: true)
 ```
-
-## 메모
-
-* 대화 상태는 `state_pid`(Elixir Agent)에 누적되며, 매 턴이 끝날 때
-  직전 `Job.turns`을 LLM 메시지로 풀어 다음 Job의 messages에 이어 붙인다.
-* 도구 호출(`tool_execution_*`), 턴 경계(`turn_start/end`)는 이 노트북에서
-  화면에 표시하지 않는다.
-* 셋업 셀을 다시 실행하면 새 `state_pid`가 생기고 이전 대화는 잊혀진다.
