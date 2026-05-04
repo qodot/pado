@@ -1,5 +1,5 @@
 defmodule Pado.LLM.CredentialTest do
-  # config 글로벌을 set하므로 async: false
+  # 전역 설정을 바꾸므로 async: false
   use ExUnit.Case, async: false
 
   alias Pado.LLM.Credential
@@ -22,7 +22,7 @@ defmodule Pado.LLM.CredentialTest do
   end
 
   describe "save/2 + load/1" do
-    test "config map의 loader로 dispatch해서 round-trip한다", %{path: path} do
+    test "config map의 loader로 저장하고 다시 불러온다", %{path: path} do
       creds = Credentials.build(:openai_codex, "a", "r", 3600, %{"account_id" => "acc1"})
 
       assert :ok = Credential.save(:test_openai, creds)
@@ -36,11 +36,11 @@ defmodule Pado.LLM.CredentialTest do
   end
 
   describe "config에 없는 provider" do
-    test "load는 {:error, {:unconfigured_provider, _}}" do
+    test "load는 설정 누락 오류를 반환한다" do
       assert {:error, {:unconfigured_provider, :unknown}} = Credential.load(:unknown)
     end
 
-    test "save는 {:error, {:unconfigured_provider, _}}" do
+    test "save는 설정 누락 오류를 반환한다" do
       creds = Credentials.build(:openai_codex, "a", "r", 3600)
       assert {:error, {:unconfigured_provider, :unknown}} = Credential.save(:unknown, creds)
     end

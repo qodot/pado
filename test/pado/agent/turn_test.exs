@@ -72,7 +72,7 @@ defmodule Pado.Agent.TurnTest do
       {:ok, emit: emit}
     end
 
-    test ":start → :done 만 있는 스트림은 {:ok, message} 반환", %{emit: emit} do
+    test ":start → :done 만 있는 스트림은 {:ok, message}를 반환한다", %{emit: emit} do
       msg = %Assistant{content: [{:text, "hi"}]}
 
       events = [
@@ -83,7 +83,7 @@ defmodule Pado.Agent.TurnTest do
       assert {:ok, ^msg} = Turn.consume_llm_stream(events, "job-1", emit)
     end
 
-    test ":start → :error는 {:error, message} 반환", %{emit: emit} do
+    test ":start → :error는 {:error, message}를 반환한다", %{emit: emit} do
       msg = %Assistant{content: [{:text, "boom"}], stop_reason: :error}
 
       events = [
@@ -94,7 +94,7 @@ defmodule Pado.Agent.TurnTest do
       assert {:error, ^msg} = Turn.consume_llm_stream(events, "job-1", emit)
     end
 
-    test ":start에서 :message_start emit", %{emit: emit} do
+    test ":start에서 :message_start를 emit한다", %{emit: emit} do
       first = %Assistant{}
 
       events = [
@@ -122,7 +122,7 @@ defmodule Pado.Agent.TurnTest do
       end
     end
 
-    test ":done에서 :message_end emit", %{emit: emit} do
+    test ":done에서 :message_end를 emit한다", %{emit: emit} do
       final = %Assistant{content: [{:text, "done"}]}
 
       events = [
@@ -135,7 +135,7 @@ defmodule Pado.Agent.TurnTest do
       assert_received {:emitted, {:message_end, %{job_id: "job-1", message: ^final}}}
     end
 
-    test ":error에서도 :message_end emit", %{emit: emit} do
+    test ":error에서도 :message_end를 emit한다", %{emit: emit} do
       final = %Assistant{content: [], stop_reason: :error, error_message: "x"}
 
       events = [
@@ -148,7 +148,7 @@ defmodule Pado.Agent.TurnTest do
       assert_received {:emitted, {:message_end, %{job_id: "job-1", message: ^final}}}
     end
 
-    test "스트림이 :done/:error 없이 끝나면 {:error, _} 반환", %{emit: emit} do
+    test "스트림이 :done/:error 없이 끝나면 {:error, _}를 반환한다", %{emit: emit} do
       events = [
         {:start, %{message: %Assistant{}}},
         {:text_delta, %{index: 0, delta: "incomplete"}}
@@ -272,7 +272,7 @@ defmodule Pado.Agent.TurnTest do
                        }}
     end
 
-    test "router.stream이 {:error, _} 반환하면 {:error, reason}", %{emit: emit, creds: creds} do
+    test "router.stream이 {:error, _}를 반환하면 {:error, reason}을 반환한다", %{emit: emit, creds: creds} do
       Pado.Test.FakeLLM.put_response({:error, :network})
       {agent, job} = build_setup(creds)
       assert {:error, :network} = Turn.take(agent, job, emit)
@@ -302,7 +302,7 @@ defmodule Pado.Agent.TurnTest do
       assert tr2.content == [{:text, "bye"}]
     end
 
-    test "unknown tool은 ToolResult.error로 turn에 들어간다", %{emit: emit, creds: creds} do
+    test "알 수 없는 tool은 ToolResult.error로 turn에 들어간다", %{emit: emit, creds: creds} do
       asst = %Assistant{
         content: [{:tool_call, %{id: "c1", name: "missing", args: %{}}}]
       }
@@ -359,7 +359,7 @@ defmodule Pado.Agent.TurnTest do
       assert {:ok, %Job{turns: [%Turn{tool_results: []}]}} = Turn.take(agent, job, emit)
     end
 
-    test "LLM 응답이 :error로 끝나면 {:error, %Job{...}}을 반환 (마지막 turn은 error turn)",
+    test "LLM 응답이 :error로 끝나면 {:error, %Job{...}}을 반환한다 (마지막 turn은 error turn)",
          %{emit: emit, creds: creds} do
       error_msg = %Assistant{stop_reason: :error, error_message: "boom"}
 
@@ -403,7 +403,7 @@ defmodule Pado.Agent.TurnTest do
   end
 
   describe "tool_calls/1" do
-    test "content에서 tool_call 블록만 순서대로 추출" do
+    test "content에서 tool_call 블록만 순서대로 추출한다" do
       tc1 = %{id: "c1", name: "search", args: %{q: "x"}}
       tc2 = %{id: "c2", name: "fetch", args: %{u: "y"}}
 
@@ -430,7 +430,7 @@ defmodule Pado.Agent.TurnTest do
   end
 
   describe "find_tool/2" do
-    test "name이 일치하는 tool을 반환" do
+    test "name이 일치하는 tool을 반환한다" do
       a = make_tool("search", fn _, _ -> "a" end)
       b = make_tool("fetch", fn _, _ -> "b" end)
 
@@ -448,14 +448,14 @@ defmodule Pado.Agent.TurnTest do
   end
 
   describe "dispatch_tool/2" do
-    test "unknown tool은 ToolResult.error" do
+    test "알 수 없는 tool은 ToolResult.error를 반환한다" do
       call = %{id: "c1", name: "missing", args: %{}}
       result = Turn.dispatch_tool(call, [])
 
       assert %ToolResult{tool_call_id: "c1", tool_name: "missing", is_error: true} = result
     end
 
-    test "정상 실행 + string 반환은 ToolResult.text" do
+    test "정상 실행 후 string을 반환하면 ToolResult.text를 반환한다" do
       tools = [make_tool("echo", fn args, _ -> args["text"] end)]
       call = %{id: "c1", name: "echo", args: %{"text" => "hello"}}
 
@@ -463,7 +463,7 @@ defmodule Pado.Agent.TurnTest do
       assert %ToolResult{is_error: false, content: [{:text, "hello"}]} = result
     end
 
-    test "non-string 반환은 inspect로 문자열화" do
+    test "string이 아닌 반환값은 inspect로 문자열화한다" do
       tools = [make_tool("sum", fn args, _ -> args["a"] + args["b"] end)]
       call = %{id: "c1", name: "sum", args: %{"a" => 1, "b" => 2}}
 
@@ -471,7 +471,7 @@ defmodule Pado.Agent.TurnTest do
       assert %ToolResult{is_error: false, content: [{:text, "3"}]} = result
     end
 
-    test "실행 중 raise는 ToolResult.error" do
+    test "실행 중 raise가 발생하면 ToolResult.error를 반환한다" do
       tools = [make_tool("boom", fn _, _ -> raise "폭발" end)]
       call = %{id: "c1", name: "boom", args: %{}}
 

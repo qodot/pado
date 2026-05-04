@@ -28,7 +28,7 @@ defmodule Pado.AgentTest do
       assert {:job_end, %{status: :done, reason: nil, turns: [_]}} = List.last(events)
     end
 
-    test "multi-turn (1턴 tool_call + 2턴 final) → turn_start 이벤트 2개" do
+    test "여러 turn (1턴 tool_call + 2턴 최종 응답) → turn_start 이벤트 2개" do
       tool = make_tool("echo", fn _, _ -> "r" end)
 
       asst1 = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
@@ -56,7 +56,7 @@ defmodule Pado.AgentTest do
       {:ok, emit: emit}
     end
 
-    test "1턴에 final 응답이면 :done으로 종료", %{emit: emit} do
+    test "1턴에 최종 응답이면 :done으로 종료", %{emit: emit} do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       {agent, job} = build_setup([])
@@ -66,7 +66,7 @@ defmodule Pado.AgentTest do
       assert_received {:emitted, {:turn_end, %{turn: %Turn{index: 1}}}}
     end
 
-    test "1턴 tool_call + 2턴 final 이면 2턴 후 :done", %{emit: emit} do
+    test "1턴 tool_call + 2턴 최종 응답이면 2턴 후 :done", %{emit: emit} do
       tool = make_tool("echo", fn _, _ -> "r" end)
 
       asst1 = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
