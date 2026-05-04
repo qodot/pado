@@ -32,7 +32,7 @@ agent = %Pado.Agent{
     credentials: creds,
     model: OpenAICodex.default()
   },
-  harness: %Pado.Agent.Harness{tools: []}
+  harness: %Pado.Agent.Harness{tools: [Pado.Agent.Tools.Bash.tool()]}
 }
 
 session_id = "session-#{System.unique_integer([:positive])}"
