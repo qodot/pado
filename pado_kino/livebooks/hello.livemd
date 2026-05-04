@@ -1,7 +1,7 @@
-# Pado Agent — 첫 노트북
+# Pado Agent — 채팅 노트북
 
-Pado 에이전트를 Livebook에서 띄워, LLM 응답이 토큰 단위로 흘러오는 모습을
-그대로 화면에 그린다.
+맨 위에서 한 번에 의존성·크레덴셜·에이전트·UI를 셋업하고, 맨 아래
+영역에 대화가 무한히 누적되는 형태의 최소 채팅 UI.
 
 ## 사전 준비
 
@@ -13,32 +13,29 @@ mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ```
 
 브라우저로 열린 페이지에서 로그인하면 위 경로에 크레덴셜이 저장된다.
+경로는 본인이 저장한 위치에 맞춰 아래 셀의 `creds_path`를 수정한다.
 
-## 의존성 설치
+## 셋업
 
-`pado_kino`는 path 의존이고, 그 안에서 `pado`와 `kino`가 같이 끌려 온다.
+의존성, 크레덴셜, 에이전트, 대화 상태, 입력 처리까지 한 셀에서 끝낸다.
+이 셀은 노트북당 한 번만 실행하면 된다.
 
 ```elixir
 Mix.install([
   {:pado_kino, path: Path.expand("..", __DIR__)}
 ])
-```
 
-## 크레덴셜 로드
-
-```elixir
-creds_path = Path.expand("~/.config/pado/openai_codex.json")
-{:ok, creds} = Pado.LLM.Credential.FileLoader.load(creds_path)
-```
-
-## 에이전트와 작업 만들기
-
-```elixir
 alias Pado.Agent
-alias Pado.Agent.{Harness, Job, LLM}
+alias Pado.Agent.{Harness, Job, LLM, Turn}
 alias Pado.LLM.Catalog.OpenAICodex
+alias Pado.LLM.Credential.FileLoader
 alias Pado.LLM.Message.User
 
+# 1. 크레덴셜 로드
+creds_path = Path.expand("~/.config/pado/openai_codex.json")
+{:ok, creds} = FileLoader.load(creds_path)
+
+# 2. 에이전트와 세션
 agent = %Agent{
   llm: %LLM{
     provider: :openai_codex,
@@ -48,37 +45,72 @@ agent = %Agent{
   harness: %Harness{tools: []}
 }
 
-job = %Job{
-  messages: [User.new("안녕! 한 줄로 자기소개 해줘.")],
-  session_id: System.unique_integer([:positive]) |> to_string(),
-  job_id: "demo-1"
-}
+session_id = "session-#{System.unique_integer([:positive])}"
+
+# 3. 누적되는 메시지 상태 (Elixir Agent로 보관)
+{:ok, state_pid} = Elixir.Agent.start_link(fn -> [] end)
+
+# 4. UI 위젯
+chat_frame = Kino.Frame.new()
+input = Kino.Input.textarea("메시지", default: "안녕! 한 줄로 자기소개 해줘.")
+form = Kino.Control.form([prompt: input], submit: "보내기", reset_on_submit: [:prompt])
+
+# 5. 입력 처리
+Kino.listen(form, fn %{data: %{prompt: text}} ->
+  text = String.trim(text)
+
+  if text != "" do
+    msgs0 = Elixir.Agent.get(state_pid, & &1) ++ [User.new(text)]
+    Kino.Frame.append(chat_frame, Kino.Markdown.new("**🙂 나**\n\n" <> text))
+
+    reply_frame = Kino.Frame.new()
+    Kino.Frame.append(chat_frame, reply_frame)
+
+    job = %Job{
+      messages: msgs0,
+      session_id: session_id,
+      job_id: "job-#{System.unique_integer([:positive])}"
+    }
+
+    {_buf, final_msgs} =
+      Agent.stream(agent, job)
+      |> Enum.reduce({"", msgs0}, fn
+        {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, {buf, ms} ->
+          buf = buf <> d
+          Kino.Frame.render(reply_frame, Kino.Markdown.new("**🤖 봇**\n\n" <> buf))
+          {buf, ms}
+
+        {:job_end, %{turns: turns}}, {buf, ms} ->
+          new_ms = ms ++ Enum.flat_map(turns, &Turn.as_llm_messages/1)
+          {buf, new_ms}
+
+        _other, acc ->
+          acc
+      end)
+
+    Elixir.Agent.update(state_pid, fn _ -> final_msgs end)
+  end
+end)
+
+:ok
 ```
 
-## 스트리밍 출력
+## 채팅 UI
 
-`Pado.Agent.stream/2`이 흘려주는 이벤트 중 텍스트 델타만 골라 하나의
-Frame에 누적한다. 다른 이벤트(`turn_start`, `tool_execution_*` 등)는
-이 노트북에서는 무시한다.
+위 셋업이 끝났다면 이 셀을 한 번 실행해 채팅창을 띄운다. `chat_frame`은
+대화 내역이 위에서 아래로 누적되는 영역, `form`은 새 메시지를 보내는
+입력창이다.
 
 ```elixir
-frame = Kino.Frame.new()
-Kino.render(frame)
-
-Agent.stream(agent, job)
-|> Enum.reduce("", fn
-  {:message_update, %{llm_event: {:text_delta, %{delta: d}}}}, acc ->
-    new_acc = acc <> d
-    Kino.Frame.render(frame, Kino.Markdown.new(new_acc))
-    new_acc
-
-  _other, acc ->
-    acc
-end)
+Kino.Layout.grid([chat_frame, form], boxed: true)
 ```
 
-## 다음에 다뤄볼 것
+## 메모
 
-* `turn_start` / `turn_end`로 턴 경계 표시
-* `tool_execution_start` / `tool_execution_end`로 도구 호출 패널
-* follow-up 입력을 `Kino.Input`으로 받아 같은 세션을 이어가기
+* 대화 상태는 `state_pid`(Elixir Agent)에 누적되며, 매 턴이 끝날 때
+  직전 `Job.turns`을 LLM 메시지로 풀어 다음 Job의 messages에 이어 붙인다.
+* 도구 호출(`tool_execution_*`), 턴 경계(`turn_start/end`)는 이 노트북에서
+  화면에 표시하지 않는다. 표시가 필요해지면 `Kino.listen` 콜백 안의
+  `Enum.reduce` 패턴 매치에 case를 더 추가하면 된다.
+* 셋업 셀을 다시 실행하면 새 `state_pid`가 생기고 이전 대화는 잊혀진다.
+  대화를 초기화하고 싶을 때 같은 방식으로 활용한다.
