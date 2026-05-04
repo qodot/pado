@@ -81,6 +81,15 @@ Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
       job_id: "job-#{System.unique_integer([:positive])}"
     }
 
+    tool_result_text = fn %Pado.LLM.Message.ToolResult{content: parts} ->
+      parts
+      |> Enum.map(fn
+        {:text, t} -> t
+        other -> inspect(other)
+      end)
+      |> Enum.join("\n")
+    end
+
     {_buf, final_msgs} =
       Pado.Agent.stream(current_agent, job)
       |> Enum.reduce({"", msgs0}, fn
@@ -88,6 +97,25 @@ Kino.listen(form, fn %{data: %{model: model_id, prompt: text}} ->
           buf = buf <> d
           Kino.Frame.render(reply_frame, Kino.Markdown.new("**🤖 봇**\n\n" <> buf))
           {buf, ms}
+
+        {:tool_execution_start, %{tool_name: name, args: args}}, acc ->
+          block =
+            "**🔧 " <> name <> "**\n\n" <>
+              "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
+
+          Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+          acc
+
+        {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}}, acc ->
+          emoji = if is_error, do: "⚠️", else: "📤"
+          output = tool_result_text.(result)
+
+          block =
+            "**" <> emoji <> " " <> name <> " 결과**\n\n" <>
+              "```\n" <> output <> "\n```"
+
+          Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+          acc
 
         {:job_end, %{turns: turns}}, {buf, ms} ->
           new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
