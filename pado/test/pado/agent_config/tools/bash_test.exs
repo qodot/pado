@@ -1,9 +1,9 @@
-defmodule Pado.Agent.Tools.BashTest do
+defmodule Pado.AgentConfig.Tools.BashTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent.Tools.Tool, as: AgentTool
+  alias Pado.AgentConfig.Tools.Tool, as: AgentTool
   alias Pado.LLM.Tool, as: LLMTool
-  alias Pado.Agent.Tools.Bash
+  alias Pado.AgentConfig.Tools.Bash
 
   describe "tool/0" do
     test "schema의 name은 \"bash\"이고 command는 required다" do

@@ -1,4 +1,4 @@
-defmodule Pado.Agent.LLM do
+defmodule Pado.AgentConfig.LLM do
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Model
 

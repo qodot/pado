@@ -1,6 +1,7 @@
-defmodule Pado.Agent do
-  alias Pado.Agent.{Event, Harness, Job, LLM, Turn}
-  alias Pado.Agent.Tools.Tool
+defmodule Pado.AgentConfig do
+  alias Pado.Agent.{Event, Job, Turn}
+  alias Pado.AgentConfig.{Harness, LLM}
+  alias Pado.AgentConfig.Tools.Tool
   alias Pado.LLM.Context, as: LLMContext
 
   @type send_event_fun :: (Event.t() -> any())

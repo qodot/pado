@@ -16,7 +16,7 @@ cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ## Configure Agent
 
 ````elixir
-alias Pado.Agent.LLM
+alias Pado.AgentConfig.LLM
 alias Pado.LLM.Catalog.OpenAICodex
 alias Pado.LLM.Credential.FileLoader
 alias Pado.LLM.Message.User
@@ -26,13 +26,13 @@ creds_path = Path.expand("~/.config/pado/openai_codex.json")
 {:ok, creds} = FileLoader.load(creds_path)
 
 # 2. 에이전트와 세션
-agent = %Pado.Agent{
-  llm: %Pado.Agent.LLM{
+agent = %Pado.AgentConfig{
+  llm: %Pado.AgentConfig.LLM{
     provider: :openai_codex,
     credentials: creds,
     model: OpenAICodex.default()
   },
-  harness: %Pado.Agent.Harness{tools: [Pado.Agent.Tools.Bash.tool(timeout: 10)]}
+  harness: %Pado.AgentConfig.Harness{tools: [Pado.AgentConfig.Tools.Bash.tool(timeout: 10)]}
 }
 
 session_id = "session-#{System.unique_integer([:positive])}"
@@ -122,7 +122,7 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
     end
 
     {_frame, _tbuf, _buf, final_msgs} =
-      Pado.Agent.stream(current_agent, job)
+      Pado.AgentConfig.stream(current_agent, job)
       |> Enum.reduce({nil, "", "", msgs0}, fn
         {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
         {frame, tbuf, buf, ms} ->

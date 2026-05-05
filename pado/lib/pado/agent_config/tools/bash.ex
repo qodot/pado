@@ -1,5 +1,5 @@
-defmodule Pado.Agent.Tools.Bash do
-  alias Pado.Agent.Tools.Tool, as: AgentTool
+defmodule Pado.AgentConfig.Tools.Bash do
+  alias Pado.AgentConfig.Tools.Tool, as: AgentTool
   alias Pado.LLM.Tool, as: LLMTool
 
   @default_timeout_seconds 60

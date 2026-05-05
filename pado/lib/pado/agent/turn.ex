@@ -1,7 +1,8 @@
 defmodule Pado.Agent.Turn do
-  alias Pado.Agent
-  alias Pado.Agent.{Event, Job, LLM}
-  alias Pado.Agent.Tools.Tool
+  alias Pado.Agent.{Event, Job}
+  alias Pado.AgentConfig
+  alias Pado.AgentConfig.LLM
+  alias Pado.AgentConfig.Tools.Tool
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult}
   alias Pado.LLM.Usage
@@ -23,8 +24,8 @@ defmodule Pado.Agent.Turn do
     [assistant] ++ tool_results
   end
 
-  @spec take(Agent.t(), Job.t(), send_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
-  def take(%Agent{} = agent, %Job{} = job, send_event) do
+  @spec take(AgentConfig.t(), Job.t(), send_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
+  def take(%AgentConfig{} = agent, %Job{} = job, send_event) do
     turn_index = length(job.turns) + 1
     llm = agent.llm
 
@@ -33,7 +34,7 @@ defmodule Pado.Agent.Turn do
     with {:ok, stream} <-
            llm.router.stream(
              llm.model,
-             Agent.llm_context(agent, job),
+             AgentConfig.llm_context(agent, job),
              llm.credentials,
              job.session_id,
              LLM.normalize_opts(llm.opts)
@@ -108,7 +109,7 @@ defmodule Pado.Agent.Turn do
   defp finalize_consume(result), do: result
 
   defp dispatch_tools(
-         %Agent{} = agent,
+         %AgentConfig{} = agent,
          %Job{} = job,
          %Assistant{} = assistant,
          turn_index,

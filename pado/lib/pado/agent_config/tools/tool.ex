@@ -1,4 +1,4 @@
-defmodule Pado.Agent.Tools.Tool do
+defmodule Pado.AgentConfig.Tools.Tool do
   alias Pado.LLM.Tool, as: RouterTool
 
   @type execute_fun :: (map(), map() -> term())

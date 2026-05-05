@@ -1,9 +1,9 @@
 defmodule Pado.Agent.TurnTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent
   alias Pado.Agent.{Job, Turn}
-  alias Pado.Agent.Tools.Tool
+  alias Pado.AgentConfig
+  alias Pado.AgentConfig.Tools.Tool
   alias Pado.LLM.{Context, Model, Usage}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Credential.OAuth.Credentials
@@ -384,14 +384,14 @@ defmodule Pado.Agent.TurnTest do
   end
 
   defp build_setup(creds, opts \\ []) do
-    agent = %Agent{
-      llm: %Pado.Agent.LLM{
+    agent = %AgentConfig{
+      llm: %Pado.AgentConfig.LLM{
         provider: :openai_codex,
         credentials: creds,
         model: Keyword.get(opts, :model, %Model{id: "test", provider: :test}),
         opts: Keyword.get(opts, :llm_opts, [])
       },
-      harness: %Pado.Agent.Harness{
+      harness: %Pado.AgentConfig.Harness{
         tools: Keyword.get(opts, :tools, [])
       }
     }

@@ -1,9 +1,9 @@
-defmodule Pado.AgentTest do
+defmodule Pado.AgentConfigTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent
   alias Pado.Agent.{Job, Turn}
-  alias Pado.Agent.Tools.Tool
+  alias Pado.AgentConfig
+  alias Pado.AgentConfig.Tools.Tool
   alias Pado.LLM.{Model, Usage}
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}
@@ -23,7 +23,7 @@ defmodule Pado.AgentTest do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       {agent, job} = build_setup([])
-      events = Agent.stream(agent, job) |> Enum.to_list()
+      events = AgentConfig.stream(agent, job) |> Enum.to_list()
 
       assert {:job_start, %{job_id: "j1"}} = hd(events)
       assert {:job_end, %{status: :done, reason: nil, turns: [_]}} = List.last(events)
@@ -37,7 +37,7 @@ defmodule Pado.AgentTest do
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
       {agent, job} = build_setup(tools: [tool])
-      events = Agent.stream(agent, job) |> Enum.to_list()
+      events = AgentConfig.stream(agent, job) |> Enum.to_list()
 
       turn_starts = Enum.filter(events, &match?({:turn_start, _}, &1))
       assert length(turn_starts) == 2
@@ -61,7 +61,7 @@ defmodule Pado.AgentTest do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "end"}]}))
 
       {agent, job} = build_setup([])
-      assert {%Job{turns: [_]}, :done, nil} = Agent.loop(agent, job, send_event)
+      assert {%Job{turns: [_]}, :done, nil} = AgentConfig.loop(agent, job, send_event)
 
       assert_received {:sent_event, {:turn_start, %{turn_index: 1}}}
       assert_received {:sent_event, {:turn_end, %{turn: %Turn{index: 1}}}}
@@ -76,7 +76,7 @@ defmodule Pado.AgentTest do
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
       {agent, job} = build_setup(tools: [tool])
-      assert {%Job{turns: turns}, :done, nil} = Agent.loop(agent, job, send_event)
+      assert {%Job{turns: turns}, :done, nil} = AgentConfig.loop(agent, job, send_event)
       assert length(turns) == 2
 
       assert_received {:sent_event, {:turn_start, %{turn_index: 1}}}
@@ -90,7 +90,7 @@ defmodule Pado.AgentTest do
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
 
       {agent, job} = build_setup(max_turns: 1, tools: [tool])
-      assert {%Job{turns: [_]}, :max_turns, nil} = Agent.loop(agent, job, send_event)
+      assert {%Job{turns: [_]}, :max_turns, nil} = AgentConfig.loop(agent, job, send_event)
     end
 
     test "LLM 응답이 :error로 끝나면 :error 상태로 종료 + reason은 error_message", %{send_event: send_event} do
@@ -106,18 +106,18 @@ defmodule Pado.AgentTest do
       )
 
       {agent, job} = build_setup([])
-      assert {%Job{turns: [_]}, :error, "boom"} = Agent.loop(agent, job, send_event)
+      assert {%Job{turns: [_]}, :error, "boom"} = AgentConfig.loop(agent, job, send_event)
     end
   end
 
   defp build_setup(opts) do
-    agent = %Agent{
-      llm: %Pado.Agent.LLM{
+    agent = %AgentConfig{
+      llm: %Pado.AgentConfig.LLM{
         provider: :openai_codex,
         credentials: Credentials.build(:openai_codex, "a", "r", 3600),
         model: %Model{id: "test", provider: :test}
       },
-      harness: %Pado.Agent.Harness{
+      harness: %Pado.AgentConfig.Harness{
         tools: Keyword.get(opts, :tools, [])
       }
     }
