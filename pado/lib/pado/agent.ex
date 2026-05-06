@@ -12,17 +12,18 @@ defmodule Pado.Agent do
 
   @spec spawn(AgentConfig.t()) :: {:ok, pid()}
   def spawn(%AgentConfig{} = config) do
-    callers = [self() | Process.get(:"$callers", [])]
-    GenServer.start(__MODULE__, {config, self(), callers})
+    owner = self()
+    callers = [owner | Process.get(:"$callers", [])]
+    GenServer.start(__MODULE__, {config, owner, callers})
   end
 
   @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()} | {:error, :not_spawning}
   def stream(agent, %Job{} = job) when is_pid(agent) do
-    ref = make_ref()
+    worker_ref = make_ref()
 
     try do
-      case GenServer.call(agent, {:start_job, job, self(), ref}) do
-        :ok -> {:ok, build_stream(agent, ref)}
+      case GenServer.call(agent, {:start_job, job, self(), worker_ref}) do
+        :ok -> {:ok, build_stream(agent, worker_ref)}
         {:error, _} = err -> err
       end
     catch
@@ -43,7 +44,7 @@ defmodule Pado.Agent do
       phase: :idle,
       job: nil,
       subscriber: nil,
-      subscriber_ref: nil,
+      worker_ref: nil,
       subscriber_monitor: nil,
       turn_task_pid: nil,
       turn_task_monitor: nil,
@@ -54,13 +55,13 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_call({:start_job, job, subscriber, ref}, _from, %{phase: :idle} = state) do
+  def handle_call({:start_job, job, subscriber, worker_ref}, _from, %{phase: :idle} = state) do
     new_state = %{
       state
       | phase: :running,
         job: job,
         subscriber: subscriber,
-        subscriber_ref: ref,
+        worker_ref: worker_ref,
         subscriber_monitor: Process.monitor(subscriber)
     }
 
@@ -151,21 +152,21 @@ defmodule Pado.Agent do
     {:stop, :normal, state}
   end
 
-  defp notify(%{subscriber: subscriber, subscriber_ref: ref}, event) do
-    send(subscriber, {ref, event})
+  defp notify(%{subscriber: subscriber, worker_ref: worker_ref}, event) do
+    send(subscriber, {worker_ref, event})
   end
 
-  defp make_send_event(%{subscriber: subscriber, subscriber_ref: ref}) do
-    fn event -> send(subscriber, {ref, event}) end
+  defp make_send_event(%{subscriber: subscriber, worker_ref: worker_ref}) do
+    fn event -> send(subscriber, {worker_ref, event}) end
   end
 
   # ---------------------------------------------------------------------------
   # Stream
   # ---------------------------------------------------------------------------
 
-  defp build_stream(agent, ref) do
+  defp build_stream(agent, worker_ref) do
     Stream.resource(
-      fn -> %{ref: ref, monitor: Process.monitor(agent), halted: false} end,
+      fn -> %{worker_ref: worker_ref, monitor: Process.monitor(agent), halted: false} end,
       &receive_event/1,
       fn s ->
         Process.demonitor(s.monitor, [:flush])
@@ -176,9 +177,9 @@ defmodule Pado.Agent do
 
   defp receive_event(%{halted: true} = s), do: {:halt, s}
 
-  defp receive_event(%{ref: ref, monitor: mon} = s) do
+  defp receive_event(%{worker_ref: worker_ref, monitor: mon} = s) do
     receive do
-      {^ref, event} ->
+      {^worker_ref, event} ->
         if Event.terminal?(event) do
           {[event], %{s | halted: true}}
         else
