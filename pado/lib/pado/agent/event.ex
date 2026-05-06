@@ -6,7 +6,7 @@ defmodule Pado.Agent.Event do
 
   @type job_id :: String.t()
   @type turn_index :: pos_integer()
-  @type status :: :done | :max_turns | :error
+  @type status :: :done | :max_turns | :error | :aborted
 
   @type t ::
           {:job_start, %{job_id: job_id()}}
