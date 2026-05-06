@@ -87,14 +87,14 @@ defmodule Pado.AgentTest do
   end
 
   describe "stream/2 라이프사이클 enforcement" do
-    test "stream/2를 두 번 호출하면 두 번째는 {:error, :not_spawning}" do
-      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
-
+    test "stream/2를 여러 번 호출하면 각각 구독 스트림을 반환한다" do
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, _stream1} = Agent.stream(agent, job)
 
-      assert {:error, :not_spawning} = Agent.stream(agent, job)
+      assert {:ok, _stream1} = Agent.stream(agent, job)
+      assert {:ok, _stream2} = Agent.stream(agent, job)
+
+      Process.exit(agent, :kill)
     end
 
     test "이미 종료된 agent에 stream/2를 호출하면 {:error, :not_spawning}" do
@@ -105,53 +105,98 @@ defmodule Pado.AgentTest do
       {:ok, stream} = Agent.stream(agent, job)
       _ = Enum.to_list(stream)
 
-      # job 끝났으면 GenServer는 stop. 충분히 기다린 뒤 다시 호출.
       wait_until_dead(agent)
 
       assert {:error, :not_spawning} = Agent.stream(agent, job)
     end
   end
 
-  describe "라이프사이클 monitor" do
-    test "spawn한 owner가 죽으면 agent도 정리된다" do
-      {config, _job} = build_setup([])
-      test_pid = self()
-
-      owner =
-        spawn(fn ->
-          {:ok, agent} = Agent.spawn(config)
-          send(test_pid, {:agent, agent})
-          # 곧장 종료 (정상)
-        end)
-
-      assert_receive {:agent, agent_pid}, 200
-      ref = Process.monitor(agent_pid)
-      assert_receive {:DOWN, ^ref, :process, ^agent_pid, _}, 500
-
-      _ = owner
-    end
-
-    test "stream의 subscriber가 죽으면 agent도 정리된다" do
-      Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
+  describe "구독자 라이프사이클" do
+    test "여러 구독자가 같은 job의 이후 이벤트를 받는다" do
+      Pado.Test.FakeLLM.put_response(
+        gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
+      )
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
 
-      test_pid = self()
-
-      subscriber =
-        spawn(fn ->
-          {:ok, _stream} = Agent.stream(agent, job)
-          send(test_pid, :subscribed)
-          # stream을 enumerate하지 않고 즉시 종료
+      subscriber1 =
+        Task.async(fn ->
+          {:ok, stream} = Agent.stream(agent, job)
+          Enum.to_list(stream)
         end)
 
-      assert_receive :subscribed, 200
+      assert_receive {:llm_stream_waiting, worker_pid}, 500
+
+      subscriber2 =
+        Task.async(fn ->
+          {:ok, stream} = Agent.stream(agent, job)
+          Enum.to_list(stream)
+        end)
+
+      assert :ok = wait_until_subscriber_count(agent, 2)
+
+      send(worker_pid, :release_llm_stream)
+
+      events1 = Task.await(subscriber1, 500)
+      events2 = Task.await(subscriber2, 500)
+
+      assert {:job_end, %{status: :done}} = List.last(events1)
+      assert {:job_end, %{status: :done}} = List.last(events2)
+
+      assert Enum.any?(events1, &match?({:message_start, _}, &1))
+      assert Enum.any?(events2, &match?({:message_start, _}, &1))
+    end
+
+    test "구독자 하나가 죽어도 다른 구독자가 남아 있으면 agent는 유지된다" do
+      Pado.Test.FakeLLM.put_response(
+        gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
+      )
+
+      {config, job} = build_setup([])
+      {:ok, agent} = Agent.spawn(config)
+
+      live_subscriber =
+        Task.async(fn ->
+          {:ok, stream} = Agent.stream(agent, job)
+          Enum.to_list(stream)
+        end)
+
+      assert_receive {:llm_stream_waiting, worker_pid}, 500
+
+      dead_subscriber =
+        spawn(fn ->
+          {:ok, stream} = Agent.stream(agent, job)
+          Enum.to_list(stream)
+        end)
+
+      assert :ok = wait_until_subscriber_count(agent, 2)
+
+      dead_ref = Process.monitor(dead_subscriber)
+      Process.exit(dead_subscriber, :kill)
+      assert_receive {:DOWN, ^dead_ref, :process, ^dead_subscriber, :killed}, 500
+
+      assert :ok = wait_until_subscriber_count(agent, 1)
+      assert Process.alive?(agent)
+
+      send(worker_pid, :release_llm_stream)
+
+      assert {:job_end, %{status: :done}} = live_subscriber |> Task.await(500) |> List.last()
+    end
+
+    test "마지막 구독자가 stream을 중단하면 agent도 정리된다" do
+      Pado.Test.FakeLLM.put_response(
+        gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
+      )
+
+      {config, job} = build_setup([])
+      {:ok, agent} = Agent.spawn(config)
+      {:ok, stream} = Agent.stream(agent, job)
+
+      assert [{:job_start, %{job_id: "j1"}}] = Enum.take(stream, 1)
 
       ref = Process.monitor(agent)
       assert_receive {:DOWN, ^ref, :process, ^agent, _}, 500
-
-      _ = subscriber
     end
   end
 
@@ -165,6 +210,25 @@ defmodule Pado.AgentTest do
       wait_until_dead(pid, retries - 1)
     else
       :ok
+    end
+  end
+
+  defp wait_until_subscriber_count(pid, count, retries \\ 50)
+
+  defp wait_until_subscriber_count(_pid, _count, 0), do: :error
+
+  defp wait_until_subscriber_count(pid, count, retries) do
+    try do
+      case :sys.get_state(pid) do
+        %{subscribers: subscribers} when map_size(subscribers) == count ->
+          :ok
+
+        _ ->
+          Process.sleep(10)
+          wait_until_subscriber_count(pid, count, retries - 1)
+      end
+    catch
+      :exit, _ -> :error
     end
   end
 
@@ -203,5 +267,29 @@ defmodule Pado.AgentTest do
        {:start, %{message: %Assistant{}}},
        {:done, %{stop_reason: :stop, usage: Usage.empty(), message: final_assistant}}
      ]}
+  end
+
+  defp gated_ok_stream(parent, final_assistant) do
+    {:ok,
+     Stream.resource(
+       fn ->
+         send(parent, {:llm_stream_waiting, self()})
+         :waiting
+       end,
+       fn
+         :waiting ->
+           receive do
+             :release_llm_stream ->
+               {[
+                  {:start, %{message: %Assistant{}}},
+                  {:done, %{stop_reason: :stop, usage: Usage.empty(), message: final_assistant}}
+                ], :done}
+           end
+
+         :done ->
+           {:halt, :done}
+       end,
+       fn _ -> :ok end
+     )}
   end
 end

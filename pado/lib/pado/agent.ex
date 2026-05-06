@@ -12,19 +12,14 @@ defmodule Pado.Agent do
 
   @spec spawn(AgentConfig.t()) :: {:ok, pid()}
   def spawn(%AgentConfig{} = config) do
-    owner = self()
-    callers = [owner | Process.get(:"$callers", [])]
-    GenServer.start(__MODULE__, {config, owner, callers})
+    GenServer.start(__MODULE__, config)
   end
 
   @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()} | {:error, :not_spawning}
   def stream(agent, %Job{} = job) when is_pid(agent) do
-    worker_ref = make_ref()
-
     try do
-      case GenServer.call(agent, {:start_job, job, self(), worker_ref}) do
-        :ok -> {:ok, build_stream(agent, worker_ref)}
-        {:error, _} = err -> err
+      case GenServer.call(agent, :stream_available) do
+        :ok -> {:ok, build_stream(agent, job)}
       end
     catch
       :exit, _ -> {:error, :not_spawning}
@@ -36,99 +31,87 @@ defmodule Pado.Agent do
   # ---------------------------------------------------------------------------
 
   @impl true
-  def init({%AgentConfig{} = config, owner, callers}) do
+  def init(%AgentConfig{} = config) do
     state = %{
       config: config,
-      owner: owner,
-      owner_monitor: Process.monitor(owner),
-      phase: :idle,
       job: nil,
-      subscriber: nil,
-      worker_ref: nil,
-      subscriber_monitor: nil,
-      turn_task_pid: nil,
-      turn_task_monitor: nil,
-      callers: callers
+      subscribers: %{},
+      job_worker_pid: nil,
+      job_worker_monitor: nil
     }
 
     {:ok, state}
   end
 
   @impl true
-  def handle_call({:start_job, job, subscriber, worker_ref}, _from, %{phase: :idle} = state) do
-    new_state = %{
+  def handle_call(:stream_available, _from, state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call(
+        {:subscribe, %Job{} = job, subscriber, subscription_ref, callers},
+        _from,
+        %{job: nil} = state
+      ) do
+    state = add_subscriber(state, subscriber, subscription_ref)
+    notify(state, {:job_start, %{job_id: job.job_id}})
+
+    {pid, ref} = start_job_worker(state.config, job, callers)
+
+    {:reply, :ok,
+     %{
+       state
+       | job: job,
+         job_worker_pid: pid,
+         job_worker_monitor: ref
+     }}
+  end
+
+  def handle_call({:subscribe, %Job{}, subscriber, subscription_ref, _callers}, _from, state) do
+    {:reply, :ok, add_subscriber(state, subscriber, subscription_ref)}
+  end
+
+  @impl true
+  def handle_cast({:unsubscribe, subscription_ref}, state) do
+    state = remove_subscriber(state, subscription_ref)
+    stop_if_no_subscribers(state)
+  end
+
+  @impl true
+  def handle_info({:job_worker_event, event}, state) do
+    notify(state, event)
+    {:noreply, state}
+  end
+
+  def handle_info({:job_worker_result, status, reason, job}, state) do
+    Process.demonitor(state.job_worker_monitor, [:flush])
+
+    state = %{
       state
-      | phase: :running,
-        job: job,
-        subscriber: subscriber,
-        worker_ref: worker_ref,
-        subscriber_monitor: Process.monitor(subscriber)
+      | job: job,
+        job_worker_pid: nil,
+        job_worker_monitor: nil
     }
 
-    notify(new_state, {:job_start, %{job_id: job.job_id}})
-    {:reply, :ok, new_state, {:continue, :run_turn}}
+    finish(state, status, reason)
   end
 
-  def handle_call({:start_job, _, _, _}, _from, state) do
-    {:reply, {:error, :not_spawning}, state}
+  def handle_info({:DOWN, ref, :process, _, :normal}, %{job_worker_monitor: ref} = state) do
+    {:noreply, state}
   end
 
-  @impl true
-  def handle_continue(:run_turn, state) do
-    parent = self()
-    send_event = make_send_event(state)
-    config = state.config
-    job = state.job
-    callers = state.callers
-
-    {pid, ref} =
-      spawn_monitor(fn ->
-        Process.put(:"$callers", callers)
-        result = Turn.take(config, job, send_event)
-        send(parent, {:turn_result, result})
-      end)
-
-    {:noreply, %{state | turn_task_pid: pid, turn_task_monitor: ref}}
+  def handle_info({:DOWN, ref, :process, _, reason}, %{job_worker_monitor: ref} = state) do
+    state = %{state | job_worker_pid: nil, job_worker_monitor: nil}
+    finish(state, :error, "job worker crashed: " <> inspect(reason))
   end
 
-  @impl true
-  def handle_info({:turn_result, {:ok, job}}, state) do
-    Process.demonitor(state.turn_task_monitor, [:flush])
-
-    new_state = %{state | job: job, turn_task_pid: nil, turn_task_monitor: nil}
-
-    case Job.next_step(job) do
-      :continue -> {:noreply, new_state, {:continue, :run_turn}}
-      status -> finish(new_state, status, nil)
+  def handle_info({:DOWN, ref, :process, _, _}, state) do
+    if Map.has_key?(state.subscribers, ref) do
+      state = %{state | subscribers: Map.delete(state.subscribers, ref)}
+      stop_if_no_subscribers(state)
+    else
+      {:noreply, state}
     end
-  end
-
-  def handle_info({:turn_result, {:error, job}}, state) do
-    Process.demonitor(state.turn_task_monitor, [:flush])
-
-    reason = List.last(job.turns).assistant.error_message
-
-    finish(
-      %{state | job: job, turn_task_pid: nil, turn_task_monitor: nil},
-      :error,
-      reason
-    )
-  end
-
-  def handle_info({:DOWN, ref, :process, _, reason}, %{turn_task_monitor: ref} = state) do
-    finish(
-      %{state | turn_task_pid: nil, turn_task_monitor: nil},
-      :error,
-      "turn task crashed: " <> inspect(reason)
-    )
-  end
-
-  def handle_info({:DOWN, ref, :process, _, _}, %{owner_monitor: ref} = state) do
-    {:stop, :normal, state}
-  end
-
-  def handle_info({:DOWN, ref, :process, _, _}, %{subscriber_monitor: ref} = state) do
-    {:stop, :normal, state}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
@@ -136,6 +119,68 @@ defmodule Pado.Agent do
   # ---------------------------------------------------------------------------
   # 내부 도우미
   # ---------------------------------------------------------------------------
+
+  defp start_job_worker(config, job, callers) do
+    parent = self()
+
+    spawn_monitor(fn ->
+      Process.put(:"$callers", callers)
+
+      {status, reason, job} =
+        run_job(config, job, fn event ->
+          send(parent, {:job_worker_event, event})
+        end)
+
+      send(parent, {:job_worker_result, status, reason, job})
+    end)
+  end
+
+  defp run_job(config, job, send_event) do
+    case Turn.take(config, job, send_event) do
+      {:ok, job} ->
+        case Job.next_step(job) do
+          :continue -> run_job(config, job, send_event)
+          status -> {status, nil, job}
+        end
+
+      {:error, job} ->
+        reason = List.last(job.turns).assistant.error_message
+        {:error, reason, job}
+    end
+  end
+
+  defp add_subscriber(state, subscriber, subscription_ref) do
+    monitor_ref = Process.monitor(subscriber)
+    subscribers = Map.put(state.subscribers, monitor_ref, {subscriber, subscription_ref})
+    %{state | subscribers: subscribers}
+  end
+
+  defp remove_subscriber(state, subscription_ref) do
+    case Enum.find(state.subscribers, fn {_, {_, ref}} -> ref == subscription_ref end) do
+      {monitor_ref, _} ->
+        Process.demonitor(monitor_ref, [:flush])
+        %{state | subscribers: Map.delete(state.subscribers, monitor_ref)}
+
+      nil ->
+        state
+    end
+  end
+
+  defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
+       when map_size(subscribers) == 0 do
+    cancel_job_worker(state)
+    {:stop, :normal, state}
+  end
+
+  defp stop_if_no_subscribers(state), do: {:noreply, state}
+
+  defp cancel_job_worker(%{job_worker_pid: nil}), do: :ok
+
+  defp cancel_job_worker(%{job_worker_pid: pid, job_worker_monitor: monitor_ref}) do
+    Process.demonitor(monitor_ref, [:flush])
+    Process.exit(pid, :shutdown)
+    :ok
+  end
 
   defp finish(state, status, reason) do
     notify(
@@ -152,45 +197,83 @@ defmodule Pado.Agent do
     {:stop, :normal, state}
   end
 
-  defp notify(%{subscriber: subscriber, worker_ref: worker_ref}, event) do
-    send(subscriber, {worker_ref, event})
-  end
-
-  defp make_send_event(%{subscriber: subscriber, worker_ref: worker_ref}) do
-    fn event -> send(subscriber, {worker_ref, event}) end
+  defp notify(%{subscribers: subscribers}, event) do
+    Enum.each(subscribers, fn {_, {subscriber, subscription_ref}} ->
+      send(subscriber, {subscription_ref, event})
+    end)
   end
 
   # ---------------------------------------------------------------------------
   # Stream
   # ---------------------------------------------------------------------------
 
-  defp build_stream(agent, worker_ref) do
+  defp build_stream(agent, job) do
     Stream.resource(
-      fn -> %{worker_ref: worker_ref, monitor: Process.monitor(agent), halted: false} end,
+      fn -> subscribe(agent, job) end,
       &receive_event/1,
-      fn s ->
-        Process.demonitor(s.monitor, [:flush])
-        :ok
-      end
+      &cleanup_subscription/1
     )
   end
 
-  defp receive_event(%{halted: true} = s), do: {:halt, s}
+  defp subscribe(agent, job) do
+    subscription_ref = make_ref()
+    agent_monitor = Process.monitor(agent)
+    callers = [self() | Process.get(:"$callers", [])]
 
-  defp receive_event(%{worker_ref: worker_ref, monitor: mon} = s) do
+    try do
+      case GenServer.call(agent, {:subscribe, job, self(), subscription_ref, callers}) do
+        :ok ->
+          %{
+            agent: agent,
+            agent_monitor: agent_monitor,
+            subscription_ref: subscription_ref,
+            halted: false,
+            pending: []
+          }
+      end
+    catch
+      :exit, reason ->
+        Process.demonitor(agent_monitor, [:flush])
+
+        %{
+          agent: agent,
+          agent_monitor: nil,
+          subscription_ref: subscription_ref,
+          halted: false,
+          pending: [agent_down_event(reason)]
+        }
+    end
+  end
+
+  defp receive_event(%{pending: [event | rest]} = state) do
+    {[event], %{state | pending: rest, halted: Event.terminal?(event)}}
+  end
+
+  defp receive_event(%{halted: true} = state), do: {:halt, state}
+
+  defp receive_event(%{subscription_ref: subscription_ref, agent_monitor: agent_monitor} = state) do
     receive do
-      {^worker_ref, event} ->
+      {^subscription_ref, event} ->
         if Event.terminal?(event) do
-          {[event], %{s | halted: true}}
+          {[event], %{state | halted: true}}
         else
-          {[event], s}
+          {[event], state}
         end
 
-      {:DOWN, ^mon, :process, _, reason} ->
-        event =
-          {:job_end, %{job_id: nil, status: :error, reason: reason, turns: []}}
-
-        {[event], %{s | halted: true}}
+      {:DOWN, ^agent_monitor, :process, _, reason} ->
+        {[agent_down_event(reason)], %{state | halted: true}}
     end
+  end
+
+  defp cleanup_subscription(%{agent_monitor: nil}), do: :ok
+
+  defp cleanup_subscription(%{agent: agent, agent_monitor: agent_monitor, subscription_ref: ref}) do
+    GenServer.cast(agent, {:unsubscribe, ref})
+    Process.demonitor(agent_monitor, [:flush])
+    :ok
+  end
+
+  defp agent_down_event(reason) do
+    {:job_end, %{job_id: nil, status: :error, reason: reason, turns: []}}
   end
 end
