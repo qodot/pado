@@ -150,9 +150,22 @@ defmodule Pado.Agent do
   # 내부 도우미
   # ---------------------------------------------------------------------------
 
+  defp stop_if_no_subscribers(
+         %{
+           subscribers: subscribers,
+           job: %Job{} = job,
+           job_worker_pid: pid,
+           job_worker_monitor: ref
+         } =
+           state
+       )
+       when map_size(subscribers) == 0 and is_pid(pid) and is_reference(ref) do
+    Job.abort(job, pid, ref)
+    {:stop, :normal, state}
+  end
+
   defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
        when map_size(subscribers) == 0 do
-    Job.abort(state.job, state.job_worker_pid, state.job_worker_monitor)
     {:stop, :normal, state}
   end
 

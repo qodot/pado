@@ -62,18 +62,12 @@ defmodule Pado.Agent.Job do
   end
 
   @spec abort(t(), pid() | nil, reference() | nil) :: :ok
-  def abort(%__MODULE__{} = job, pid, monitor_ref) do
+  def abort(%__MODULE__{} = job, pid, monitor_ref)
+      when is_pid(pid) and is_reference(monitor_ref) do
     job.running_tools
     |> Map.values()
     |> Enum.each(fn %{task: task, abort: abort} -> abort.(task) end)
 
-    abort(pid, monitor_ref)
-  end
-
-  @spec abort(pid() | nil, reference() | nil) :: :ok
-  def abort(nil, _monitor_ref), do: :ok
-
-  def abort(pid, monitor_ref) when is_pid(pid) and is_reference(monitor_ref) do
     Process.demonitor(monitor_ref, [:flush])
     Process.exit(pid, :shutdown)
     :ok
