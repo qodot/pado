@@ -1,0 +1,36 @@
+# Mix 빌드 산출물
+/_build/
+
+# 테스트 커버리지 산출물
+/cover/
+
+# 의존성 소스
+/deps/
+
+# ExDoc 생성 문서
+/doc/
+
+# 로컬 의존성 편집용 fetch 파일
+/.fetch
+
+# Erlang VM 크래시 덤프
+erl_crash.dump
+
+# 아카이브 산출물
+*.ez
+
+# 임시 파일
+/tmp/
+
+# Hex 패키지 산출물
+pado_web-*.tar
+
+# 에셋 빌드 산출물
+/priv/static/assets/
+
+# digest 처리된 에셋 매니페스트
+/priv/static/cache_manifest.json
+
+# Node.js/npm 산출물
+npm-debug.log
+/assets/node_modules/

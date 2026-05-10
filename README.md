@@ -13,6 +13,7 @@
 
 - [`pado/`](pado) — 에이전트 백엔드 라이브러리 + 런타임입니다.
 - [`pado_kino/`](pado_kino) — Livebook(Kino) 환경에서 Pado 에이전트를 띄우기 위한 헬퍼와 예제 노트북 모음입니다.
+- [`pado_web/`](pado_web) — 한 컴퓨터에서 실행해 쓰는 Phoenix LiveView 기반 Pado 웹 에이전트 클라이언트입니다.
 - [`pado_cloud/`](pado_cloud) — Phoenix LiveView 기반의 Pado SaaS 웹 클라이언트입니다.
 
 ## Livebook에서 실행

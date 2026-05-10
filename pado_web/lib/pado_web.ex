@@ -1,0 +1,2 @@
+defmodule PadoWeb do
+end
