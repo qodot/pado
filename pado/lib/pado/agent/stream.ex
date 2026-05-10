@@ -1,20 +1,28 @@
 defmodule Pado.Agent.Stream do
   alias Pado.Agent.Event
 
-  @spec build(map()) :: Enumerable.t()
-  def build(subscription) when is_map(subscription) do
+  @spec build(pid(), reference(), reference()) :: Enumerable.t()
+  def build(agent, stream_ref, agent_monitor)
+      when is_pid(agent) and is_reference(stream_ref) and is_reference(agent_monitor) do
     Stream.resource(
-      fn -> subscription end,
+      fn ->
+        %{
+          agent: agent,
+          stream_ref: stream_ref,
+          agent_monitor: agent_monitor,
+          halted: false
+        }
+      end,
       &receive_event/1,
-      &cleanup_subscription/1
+      &cleanup_stream/1
     )
   end
 
   defp receive_event(%{halted: true} = state), do: {:halt, state}
 
-  defp receive_event(%{subscription_ref: subscription_ref, agent_monitor: agent_monitor} = state) do
+  defp receive_event(%{stream_ref: stream_ref, agent_monitor: agent_monitor} = state) do
     receive do
-      {^subscription_ref, event} ->
+      {^stream_ref, event} ->
         if Event.terminal?(event) do
           {[event], %{state | halted: true}}
         else
@@ -26,8 +34,8 @@ defmodule Pado.Agent.Stream do
     end
   end
 
-  defp cleanup_subscription(%{agent: agent, agent_monitor: agent_monitor, subscription_ref: ref}) do
-    GenServer.cast(agent, {:unsubscribe, ref})
+  defp cleanup_stream(%{agent: agent, agent_monitor: agent_monitor, stream_ref: stream_ref}) do
+    GenServer.cast(agent, {:unsubscribe, stream_ref})
     Process.demonitor(agent_monitor, [:flush])
     :ok
   end
