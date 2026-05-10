@@ -23,7 +23,18 @@ alias Pado.LLM.Message.User
 
 # 1. 크레덴셜 로드
 creds_path = Path.expand("~/.config/pado/openai_codex.json")
-{:ok, creds} = FileLoader.load(creds_path)
+
+creds =
+  case FileLoader.load(creds_path) do
+    {:ok, creds} ->
+      creds
+
+    {:error, :enoent} ->
+      raise "Credentials file not found: #{creds_path}. Run: cd pado && mix pado.llm.login --output #{creds_path}"
+
+    {:error, reason} ->
+      raise "Failed to load credentials: #{inspect(reason)}"
+  end
 
 # 2. 에이전트와 세션
 agent = %Pado.AgentConfig{
@@ -67,6 +78,23 @@ form =
     submit: "보내기",
     reset_on_submit: [:prompt]
   )
+
+wait_until_subscriber_count = fn pid, count ->
+  Enum.reduce_while(1..50, :error, fn _, _ ->
+    try do
+      case :sys.get_state(pid) do
+        %{subscribers: subscribers} when map_size(subscribers) == count ->
+          {:halt, :ok}
+
+        _ ->
+          Process.sleep(10)
+          {:cont, :error}
+      end
+    catch
+      :exit, _ -> {:halt, :error}
+    end
+  end)
+end
 
 # 5. 입력 처리
 Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} ->
@@ -121,50 +149,61 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
       end
     end
 
-    {_frame, _tbuf, _buf, final_msgs} =
-      Pado.AgentConfig.stream(current_agent, job)
-      |> Enum.reduce({nil, "", "", msgs0}, fn
-        {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
-        {frame, tbuf, buf, ms} ->
-          frame = ensure_frame.(frame)
-          new_tbuf = tbuf <> d
-          render_reply.(frame, new_tbuf, buf)
-          {frame, new_tbuf, buf, ms}
+    {:ok, agent_pid} = Pado.Agent.spawn(current_agent)
 
-        {:message_update, %{llm_event: {:text_delta, %{delta: d}}}},
-        {frame, tbuf, buf, ms} ->
-          frame = ensure_frame.(frame)
-          new_buf = buf <> d
-          render_reply.(frame, tbuf, new_buf)
-          {frame, tbuf, new_buf, ms}
+    collector =
+      Task.async(fn ->
+        agent_pid
+        |> Pado.Stream.subscribe()
+        |> Enum.reduce({nil, "", "", msgs0}, fn
+          {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
+          {frame, tbuf, buf, ms} ->
+            frame = ensure_frame.(frame)
+            new_tbuf = tbuf <> d
+            render_reply.(frame, new_tbuf, buf)
+            {frame, new_tbuf, buf, ms}
 
-        {:tool_execution_start, %{tool_name: name, args: args}}, {_frame, _tbuf, _buf, ms} ->
-          block =
-            "**🔧 " <> name <> "**\n\n" <>
-              "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
+          {:message_update, %{llm_event: {:text_delta, %{delta: d}}}},
+          {frame, tbuf, buf, ms} ->
+            frame = ensure_frame.(frame)
+            new_buf = buf <> d
+            render_reply.(frame, tbuf, new_buf)
+            {frame, tbuf, new_buf, ms}
 
-          Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-          {nil, "", "", ms}
+          {:tool_execution_start, %{tool_name: name, args: args}}, {_frame, _tbuf, _buf, ms} ->
+            block =
+              "**🔧 " <> name <> "**\n\n" <>
+                "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
 
-        {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}},
-        {_frame, _tbuf, _buf, ms} ->
-          emoji = if is_error, do: "⚠️", else: "📤"
-          output = tool_result_text.(result)
+            Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+            {nil, "", "", ms}
 
-          block =
-            "**" <> emoji <> " " <> name <> " 결과**\n\n" <>
-              "```\n" <> output <> "\n```"
+          {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}},
+          {_frame, _tbuf, _buf, ms} ->
+            emoji = if is_error, do: "⚠️", else: "📤"
+            output = tool_result_text.(result)
 
-          Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-          {nil, "", "", ms}
+            block =
+              "**" <> emoji <> " " <> name <> " 결과**\n\n" <>
+                "```\n" <> output <> "\n```"
 
-        {:job_end, %{turns: turns}}, {frame, tbuf, buf, ms} ->
-          new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
-          {frame, tbuf, buf, new_ms}
+            Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+            {nil, "", "", ms}
 
-        _other, acc ->
-          acc
+          {:job_end, %{turns: turns}}, {frame, tbuf, buf, ms} ->
+            new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
+            {frame, tbuf, buf, new_ms}
+
+          _other, acc ->
+            acc
+        end)
       end)
+
+    :ok = wait_until_subscriber_count.(agent_pid, 1)
+    callers = [self() | Process.get(:"$callers", [])]
+    :ok = GenServer.call(agent_pid, {:start_job, self(), job, callers})
+
+    {_frame, _tbuf, _buf, final_msgs} = Task.await(collector, :infinity)
 
     Elixir.Agent.update(state_pid, fn _ -> final_msgs end)
   end
