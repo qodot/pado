@@ -4,60 +4,25 @@ defmodule Pado.Agent.JobTest do
   alias Pado.Agent.{Job, Turn}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
-  describe "next_step/1" do
-    test "turns가 비어 있으면 :done (방어적 default)" do
-      assert Job.next_step(build_job(turns: [])) == :done
+  describe "cancel/2" do
+    test "pid가 nil이면 아무 작업 없이 :ok를 반환한다" do
+      assert :ok = Job.cancel(nil, nil)
     end
 
-    test "turns 길이가 max_turns에 도달하면 :max_turns" do
-      job =
-        build_job(
-          max_turns: 2,
-          turns: [
-            %Turn{index: 1, assistant: with_tool_call()},
-            %Turn{index: 2, assistant: with_tool_call()}
-          ]
-        )
+    test "worker 프로세스를 종료하고 monitor DOWN 메시지를 flush한다" do
+      worker = spawn(fn -> Process.sleep(:infinity) end)
+      monitor_ref = Process.monitor(worker)
 
-      assert Job.next_step(job) == :max_turns
-    end
-
-    test "turns 길이가 max_turns를 초과해도 :max_turns" do
-      job =
-        build_job(
-          max_turns: 1,
-          turns: [
-            %Turn{index: 1, assistant: with_tool_call()},
-            %Turn{index: 2, assistant: with_tool_call()}
-          ]
-        )
-
-      assert Job.next_step(job) == :max_turns
-    end
-
-    test "마지막 turn에 tool_call이 있고 max_turns 안 도달이면 :continue" do
-      job =
-        build_job(
-          max_turns: 5,
-          turns: [%Turn{index: 1, assistant: with_tool_call()}]
-        )
-
-      assert Job.next_step(job) == :continue
-    end
-
-    test "마지막 turn에 tool_call이 없고 max_turns 안 도달이면 :done" do
-      job =
-        build_job(
-          max_turns: 5,
-          turns: [%Turn{index: 1, assistant: %Assistant{content: [{:text, "끝"}]}}]
-        )
-
-      assert Job.next_step(job) == :done
+      assert :ok = Job.cancel(worker, monitor_ref)
+      refute Process.alive?(worker)
+      refute_receive {:DOWN, ^monitor_ref, :process, ^worker, _}, 50
     end
   end
 
-  defp with_tool_call do
-    %Assistant{content: [{:tool_call, %{id: "c1", name: "any", args: %{}}}]}
+  describe "기본 상태" do
+    test "running_tools는 빈 맵으로 시작한다" do
+      assert %Job{running_tools: %{}} = build_job()
+    end
   end
 
   describe "llm_messages/1" do

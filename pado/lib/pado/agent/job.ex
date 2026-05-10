@@ -4,21 +4,21 @@ defmodule Pado.Agent.Job do
   alias Pado.LLM.Message, as: LLMMessage
 
   @type t :: %__MODULE__{
-          messages: [LLMMessage.t()],
           session_id: String.t(),
-          turns: [Turn.t()],
           job_id: String.t() | nil,
+          messages: [LLMMessage.t()],
+          turns: [Turn.t()],
+          running_tools: map(),
           max_turns: pos_integer()
         }
 
-  @type next_decision :: :continue | :done | :max_turns
-
   @enforce_keys [:messages, :session_id]
   defstruct [
-    :messages,
     :session_id,
+    :job_id,
+    messages: [],
     turns: [],
-    job_id: nil,
+    running_tools: %{},
     max_turns: 10
   ]
 
@@ -50,13 +50,13 @@ defmodule Pado.Agent.Job do
     {pid, ref}
   end
 
-  @spec next_step(t()) :: next_decision()
-  def next_step(%__MODULE__{turns: turns, max_turns: max}) do
-    cond do
-      length(turns) >= max -> :max_turns
-      has_tool_calls?(List.last(turns)) -> :continue
-      true -> :done
-    end
+  @spec cancel(pid() | nil, reference() | nil) :: :ok
+  def cancel(nil, _monitor_ref), do: :ok
+
+  def cancel(pid, monitor_ref) when is_pid(pid) and is_reference(monitor_ref) do
+    Process.demonitor(monitor_ref, [:flush])
+    Process.exit(pid, :shutdown)
+    :ok
   end
 
   defp take_turn(job, config, send_job_event) do
@@ -70,6 +70,14 @@ defmodule Pado.Agent.Job do
       {:error, job} ->
         reason = List.last(job.turns).assistant.error_message
         {:error, reason, job}
+    end
+  end
+
+  defp next_step(%__MODULE__{turns: turns, max_turns: max}) do
+    cond do
+      length(turns) >= max -> :max_turns
+      has_tool_calls?(List.last(turns)) -> :continue
+      true -> :done
     end
   end
 

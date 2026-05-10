@@ -140,19 +140,11 @@ defmodule Pado.Agent do
 
   defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
        when map_size(subscribers) == 0 do
-    cancel_job_worker(state)
+    Job.cancel(state.job_worker_pid, state.job_worker_monitor)
     {:stop, :normal, state}
   end
 
   defp stop_if_no_subscribers(state), do: {:noreply, state}
-
-  defp cancel_job_worker(%{job_worker_pid: nil}), do: :ok
-
-  defp cancel_job_worker(%{job_worker_pid: pid, job_worker_monitor: monitor_ref}) do
-    Process.demonitor(monitor_ref, [:flush])
-    Process.exit(pid, :shutdown)
-    :ok
-  end
 
   defp notify(%{subscribers: subscribers}, event) do
     Enum.each(subscribers, fn {_, {subscriber, stream_ref}} ->
