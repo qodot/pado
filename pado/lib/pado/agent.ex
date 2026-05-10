@@ -1,7 +1,7 @@
 defmodule Pado.Agent do
   use GenServer
 
-  alias Pado.Agent.{Job, Turn}
+  alias Pado.Agent.Job
   alias Pado.AgentConfig
 
   @type t :: pid()
@@ -9,17 +9,6 @@ defmodule Pado.Agent do
   @spec spawn(AgentConfig.t()) :: {:ok, pid()}
   def spawn(%AgentConfig{} = config) do
     GenServer.start(__MODULE__, config)
-  end
-
-  @spec start(pid(), Job.t()) :: :ok | {:error, :not_spawning | :already_started}
-  def start(agent, %Job{} = job) when is_pid(agent) do
-    callers = [self() | Process.get(:"$callers", [])]
-
-    try do
-      GenServer.call(agent, {:start, job, callers})
-    catch
-      :exit, _reason -> {:error, :not_spawning}
-    end
   end
 
   @impl true
@@ -37,12 +26,26 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_call({:start, %Job{} = job, callers}, _from, %{job: nil} = state) do
-    state = %{state | job: job, callers: callers}
-    {:reply, :ok, start_if_ready(state)}
+  def handle_call({:start_job, _subscriber, %Job{} = job, callers}, _from, %{job: nil} = state) do
+    notify(state, {:job_start, %{job_id: job.job_id}})
+    parent = self()
+
+    send_job_event = fn event -> send(parent, {:receive_job_event, event}) end
+
+    {pid, ref} =
+      Job.run(job, state.config, callers, send_job_event)
+
+    {:reply, :ok,
+     %{
+       state
+       | job: job,
+         callers: callers,
+         job_worker_pid: pid,
+         job_worker_monitor: ref
+     }}
   end
 
-  def handle_call({:start, %Job{}, _callers}, _from, state) do
+  def handle_call({:start_job, _subscriber, %Job{}, _callers}, _from, state) do
     {:reply, {:error, :already_started}, state}
   end
 
@@ -54,7 +57,7 @@ defmodule Pado.Agent do
       | subscribers: state.subscribers |> Map.put(subscriber_monitor, {subscriber, stream_ref})
     }
 
-    {:reply, :ok, start_if_ready(state)}
+    {:reply, :ok, state}
   end
 
   @impl true
@@ -75,13 +78,7 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_info({:job_worker_event, event}, state) do
-    notify(state, event)
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_info({:job_worker_result, status, reason, job}, state) do
+  def handle_info({:receive_job_event, {:job_end, %{job: job} = data}}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
 
     state = %{
@@ -92,7 +89,13 @@ defmodule Pado.Agent do
         job_worker_monitor: nil
     }
 
-    finish(state, status, reason)
+    notify(state, {:job_end, Map.delete(data, :job)})
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:receive_job_event, event}, state) do
+    notify(state, event)
+    {:noreply, state}
   end
 
   @impl true
@@ -103,7 +106,19 @@ defmodule Pado.Agent do
   @impl true
   def handle_info({:DOWN, ref, :process, _, reason}, %{job_worker_monitor: ref} = state) do
     state = %{state | job_worker_pid: nil, job_worker_monitor: nil}
-    finish(state, :error, "job worker crashed: " <> inspect(reason))
+
+    notify(
+      state,
+      {:job_end,
+       %{
+         job_id: state.job.job_id,
+         status: :error,
+         reason: "job worker crashed: " <> inspect(reason),
+         turns: state.job.turns
+       }}
+    )
+
+    {:stop, :normal, state}
   end
 
   @impl true
@@ -123,44 +138,6 @@ defmodule Pado.Agent do
   # 내부 도우미
   # ---------------------------------------------------------------------------
 
-  defp start_if_ready(%{job: %Job{}, job_worker_pid: nil, subscribers: subscribers} = state)
-       when map_size(subscribers) > 0 do
-    notify(state, {:job_start, %{job_id: state.job.job_id}})
-    {pid, ref} = start_job_worker(state.config, state.job, state.callers)
-    %{state | job_worker_pid: pid, job_worker_monitor: ref}
-  end
-
-  defp start_if_ready(state), do: state
-
-  defp start_job_worker(config, job, callers) do
-    parent = self()
-
-    spawn_monitor(fn ->
-      Process.put(:"$callers", callers)
-
-      {status, reason, job} =
-        run_job(config, job, fn event ->
-          send(parent, {:job_worker_event, event})
-        end)
-
-      send(parent, {:job_worker_result, status, reason, job})
-    end)
-  end
-
-  defp run_job(config, job, send_event) do
-    case Turn.take(config, job, send_event) do
-      {:ok, job} ->
-        case Job.next_step(job) do
-          :continue -> run_job(config, job, send_event)
-          status -> {status, nil, job}
-        end
-
-      {:error, job} ->
-        reason = List.last(job.turns).assistant.error_message
-        {:error, reason, job}
-    end
-  end
-
   defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
        when map_size(subscribers) == 0 do
     cancel_job_worker(state)
@@ -175,21 +152,6 @@ defmodule Pado.Agent do
     Process.demonitor(monitor_ref, [:flush])
     Process.exit(pid, :shutdown)
     :ok
-  end
-
-  defp finish(state, status, reason) do
-    notify(
-      state,
-      {:job_end,
-       %{
-         job_id: state.job.job_id,
-         status: status,
-         reason: reason,
-         turns: state.job.turns
-       }}
-    )
-
-    {:stop, :normal, state}
   end
 
   defp notify(%{subscribers: subscribers}, event) do

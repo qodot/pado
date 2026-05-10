@@ -14,7 +14,7 @@ defmodule Pado.Agent.Turn do
           usage: Usage.t() | nil
         }
 
-  @type send_event_fun :: (Event.t() -> any())
+  @type send_job_event_fun :: (Event.t() -> any())
 
   @enforce_keys [:index, :assistant]
   defstruct [:index, :assistant, tool_results: [], usage: nil]
@@ -24,12 +24,12 @@ defmodule Pado.Agent.Turn do
     [assistant] ++ tool_results
   end
 
-  @spec take(AgentConfig.t(), Job.t(), send_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
-  def take(%AgentConfig{} = agent, %Job{} = job, send_event) do
+  @spec take(AgentConfig.t(), Job.t(), send_job_event_fun) :: {:ok, Job.t()} | {:error, Job.t()}
+  def take(%AgentConfig{} = agent, %Job{} = job, send_job_event) do
     turn_index = length(job.turns) + 1
     llm = agent.llm
 
-    send_event.({:turn_start, %{job_id: job.job_id, turn_index: turn_index}})
+    send_job_event.({:turn_start, %{job_id: job.job_id, turn_index: turn_index}})
 
     with {:ok, stream} <-
            llm.router.stream(
@@ -39,16 +39,16 @@ defmodule Pado.Agent.Turn do
              job.session_id,
              LLM.normalize_opts(llm.opts)
            ),
-         {:ok, assistant} <- consume_llm_stream(stream, job.job_id, send_event) do
-      tool_results = dispatch_tools(agent, job, assistant, turn_index, send_event)
+         {:ok, assistant} <- consume_llm_stream(stream, job.job_id, send_job_event) do
+      tool_results = dispatch_tools(agent, job, assistant, turn_index, send_job_event)
 
       turn = build_turn(turn_index, assistant, tool_results)
-      send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
+      send_job_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
       {:ok, %{job | turns: job.turns ++ [turn]}}
     else
       {:error, %Assistant{} = assistant} ->
         turn = build_turn(turn_index, assistant, [])
-        send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
+        send_job_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
 
       {:error, reason} ->
@@ -62,32 +62,32 @@ defmodule Pado.Agent.Turn do
         assistant = %Assistant{stop_reason: :error, error_message: error_message}
 
         turn = build_turn(turn_index, assistant, [])
-        send_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
+        send_job_event.({:turn_end, %{job_id: job.job_id, turn: turn}})
         {:error, %{job | turns: job.turns ++ [turn]}}
     end
   end
 
   @doc false
-  @spec consume_llm_stream(Enumerable.t(), Event.job_id(), send_event_fun) ::
+  @spec consume_llm_stream(Enumerable.t(), Event.job_id(), send_job_event_fun) ::
           {:ok, Assistant.t()} | {:error, Assistant.t()}
-  def consume_llm_stream(stream, job_id, send_event) do
-    send_update = &send_event.({:message_update, %{job_id: job_id, llm_event: &1}})
+  def consume_llm_stream(stream, job_id, send_job_event) do
+    send_update = &send_job_event.({:message_update, %{job_id: job_id, llm_event: &1}})
 
     stream
     |> Enum.reduce_while(nil, fn
       {:start, %{message: msg}} = event, _ ->
-        send_event.({:message_start, %{job_id: job_id, message: msg}})
+        send_job_event.({:message_start, %{job_id: job_id, message: msg}})
         send_update.(event)
         {:cont, nil}
 
       {:done, %{message: msg}} = event, _ ->
         send_update.(event)
-        send_event.({:message_end, %{job_id: job_id, message: msg}})
+        send_job_event.({:message_end, %{job_id: job_id, message: msg}})
         {:halt, {:ok, msg}}
 
       {:error, %{message: msg}} = event, _ ->
         send_update.(event)
-        send_event.({:message_end, %{job_id: job_id, message: msg}})
+        send_job_event.({:message_end, %{job_id: job_id, message: msg}})
         {:halt, {:error, msg}}
 
       event, _ ->
@@ -113,12 +113,12 @@ defmodule Pado.Agent.Turn do
          %Job{} = job,
          %Assistant{} = assistant,
          turn_index,
-         send_event
+         send_job_event
        ) do
     assistant
     |> tool_calls()
     |> Enum.map(fn call ->
-      send_event.(
+      send_job_event.(
         {:tool_execution_start,
          %{
            job_id: job.job_id,
@@ -131,7 +131,7 @@ defmodule Pado.Agent.Turn do
 
       result = dispatch_tool(call, agent.harness.tools)
 
-      send_event.(
+      send_job_event.(
         {:tool_execution_end,
          %{
            job_id: job.job_id,
