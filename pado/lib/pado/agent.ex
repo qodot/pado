@@ -77,6 +77,23 @@ defmodule Pado.Agent do
     stop_if_no_subscribers(state)
   end
 
+  def handle_cast(
+        :abort_job,
+        %{job: %Job{} = job, job_worker_pid: pid, job_worker_monitor: ref} = state
+      )
+      when is_pid(pid) and is_reference(ref) do
+    Job.abort(job, pid, ref)
+
+    notify(state, {
+      :job_end,
+      %{job_id: job.job_id, status: :aborted, reason: nil, turns: job.turns}
+    })
+
+    {:stop, :normal, state}
+  end
+
+  def handle_cast(:abort_job, state), do: {:stop, :normal, state}
+
   @impl true
   def handle_info({:receive_job_event, {:tool_execution_start, data} = event}, state) do
     job = Job.start_tool(state.job, data.tool_call, data.task, data.abort)
@@ -110,12 +127,10 @@ defmodule Pado.Agent do
     {:noreply, state}
   end
 
-  @impl true
   def handle_info({:DOWN, ref, :process, _, :normal}, %{job_worker_monitor: ref} = state) do
     {:noreply, state}
   end
 
-  @impl true
   def handle_info({:DOWN, ref, :process, _, reason}, %{job_worker_monitor: ref} = state) do
     state = %{state | job_worker_pid: nil, job_worker_monitor: nil}
 
@@ -133,7 +148,6 @@ defmodule Pado.Agent do
     {:stop, :normal, state}
   end
 
-  @impl true
   def handle_info({:DOWN, ref, :process, _, _}, state) do
     if Map.has_key?(state.subscribers, ref) do
       state = %{state | subscribers: Map.delete(state.subscribers, ref)}
@@ -143,30 +157,16 @@ defmodule Pado.Agent do
     end
   end
 
-  @impl true
   def handle_info(_msg, state), do: {:noreply, state}
 
   # ---------------------------------------------------------------------------
   # 내부 도우미
   # ---------------------------------------------------------------------------
 
-  defp stop_if_no_subscribers(
-         %{
-           subscribers: subscribers,
-           job: %Job{} = job,
-           job_worker_pid: pid,
-           job_worker_monitor: ref
-         } =
-           state
-       )
-       when map_size(subscribers) == 0 and is_pid(pid) and is_reference(ref) do
-    Job.abort(job, pid, ref)
-    {:stop, :normal, state}
-  end
-
   defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
        when map_size(subscribers) == 0 do
-    {:stop, :normal, state}
+    GenServer.cast(self(), :abort_job)
+    {:noreply, state}
   end
 
   defp stop_if_no_subscribers(state), do: {:noreply, state}
