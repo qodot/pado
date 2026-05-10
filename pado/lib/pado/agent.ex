@@ -1,7 +1,7 @@
 defmodule Pado.Agent do
   use GenServer
 
-  alias Pado.Agent.{Event, Job, Turn}
+  alias Pado.Agent.{Job, Stream, Turn}
   alias Pado.AgentConfig
 
   @type t :: pid()
@@ -13,7 +13,7 @@ defmodule Pado.Agent do
 
   @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()}
   def stream(agent, %Job{} = job) when is_pid(agent) do
-    {:ok, build_stream(agent, job)}
+    {:ok, Stream.build(agent, job)}
   end
 
   # ---------------------------------------------------------------------------
@@ -193,79 +193,5 @@ defmodule Pado.Agent do
     Enum.each(subscribers, fn {_, {subscriber, subscription_ref}} ->
       send(subscriber, {subscription_ref, event})
     end)
-  end
-
-  # ---------------------------------------------------------------------------
-  # Stream
-  # ---------------------------------------------------------------------------
-
-  defp build_stream(agent, job) do
-    Stream.resource(
-      fn -> subscribe(agent, job) end,
-      &receive_event/1,
-      &cleanup_subscription/1
-    )
-  end
-
-  defp subscribe(agent, job) do
-    subscription_ref = make_ref()
-    agent_monitor = Process.monitor(agent)
-    callers = [self() | Process.get(:"$callers", [])]
-
-    try do
-      case GenServer.call(agent, {:subscribe, job, self(), subscription_ref, callers}) do
-        :ok ->
-          %{
-            agent: agent,
-            agent_monitor: agent_monitor,
-            subscription_ref: subscription_ref,
-            halted: false,
-            pending: []
-          }
-      end
-    catch
-      :exit, reason ->
-        Process.demonitor(agent_monitor, [:flush])
-
-        %{
-          agent: agent,
-          agent_monitor: nil,
-          subscription_ref: subscription_ref,
-          halted: false,
-          pending: [agent_down_event(reason)]
-        }
-    end
-  end
-
-  defp receive_event(%{pending: [event | rest]} = state) do
-    {[event], %{state | pending: rest, halted: Event.terminal?(event)}}
-  end
-
-  defp receive_event(%{halted: true} = state), do: {:halt, state}
-
-  defp receive_event(%{subscription_ref: subscription_ref, agent_monitor: agent_monitor} = state) do
-    receive do
-      {^subscription_ref, event} ->
-        if Event.terminal?(event) do
-          {[event], %{state | halted: true}}
-        else
-          {[event], state}
-        end
-
-      {:DOWN, ^agent_monitor, :process, _, reason} ->
-        {[agent_down_event(reason)], %{state | halted: true}}
-    end
-  end
-
-  defp cleanup_subscription(%{agent_monitor: nil}), do: :ok
-
-  defp cleanup_subscription(%{agent: agent, agent_monitor: agent_monitor, subscription_ref: ref}) do
-    GenServer.cast(agent, {:unsubscribe, ref})
-    Process.demonitor(agent_monitor, [:flush])
-    :ok
-  end
-
-  defp agent_down_event(reason) do
-    {:job_end, %{job_id: nil, status: :error, reason: reason, turns: []}}
   end
 end
