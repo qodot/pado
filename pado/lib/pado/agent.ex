@@ -6,10 +6,6 @@ defmodule Pado.Agent do
 
   @type t :: pid()
 
-  # ---------------------------------------------------------------------------
-  # 공개 API
-  # ---------------------------------------------------------------------------
-
   @spec spawn(AgentConfig.t()) :: {:ok, pid()}
   def spawn(%AgentConfig{} = config) do
     GenServer.start(__MODULE__, config)
@@ -57,6 +53,7 @@ defmodule Pado.Agent do
      }}
   end
 
+  @impl true
   def handle_call({:subscribe, %Job{}, subscriber, subscription_ref, _callers}, _from, state) do
     {:reply, :ok, add_subscriber(state, subscriber, subscription_ref)}
   end
@@ -73,6 +70,7 @@ defmodule Pado.Agent do
     {:noreply, state}
   end
 
+  @impl true
   def handle_info({:job_worker_result, status, reason, job}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
 
@@ -86,15 +84,18 @@ defmodule Pado.Agent do
     finish(state, status, reason)
   end
 
+  @impl true
   def handle_info({:DOWN, ref, :process, _, :normal}, %{job_worker_monitor: ref} = state) do
     {:noreply, state}
   end
 
+  @impl true
   def handle_info({:DOWN, ref, :process, _, reason}, %{job_worker_monitor: ref} = state) do
     state = %{state | job_worker_pid: nil, job_worker_monitor: nil}
     finish(state, :error, "job worker crashed: " <> inspect(reason))
   end
 
+  @impl true
   def handle_info({:DOWN, ref, :process, _, _}, state) do
     if Map.has_key?(state.subscribers, ref) do
       state = %{state | subscribers: Map.delete(state.subscribers, ref)}
@@ -104,6 +105,7 @@ defmodule Pado.Agent do
     end
   end
 
+  @impl true
   def handle_info(_msg, state), do: {:noreply, state}
 
   # ---------------------------------------------------------------------------
