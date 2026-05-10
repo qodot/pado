@@ -11,9 +11,12 @@ defmodule Pado.Agent do
     GenServer.start(__MODULE__, config)
   end
 
-  @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()}
+  @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()} | {:error, :not_spawning}
   def stream(agent, %Job{} = job) when is_pid(agent) do
-    {:ok, Stream.build(agent, job)}
+    case subscribe(agent, job) do
+      {:ok, subscription} -> {:ok, Stream.build(subscription)}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -111,6 +114,29 @@ defmodule Pado.Agent do
   # ---------------------------------------------------------------------------
   # 내부 도우미
   # ---------------------------------------------------------------------------
+
+  defp subscribe(agent, job) do
+    subscription_ref = make_ref()
+    agent_monitor = Process.monitor(agent)
+    callers = [self() | Process.get(:"$callers", [])]
+
+    try do
+      case GenServer.call(agent, {:subscribe, job, self(), subscription_ref, callers}) do
+        :ok ->
+          {:ok,
+           %{
+             agent: agent,
+             agent_monitor: agent_monitor,
+             subscription_ref: subscription_ref,
+             halted: false
+           }}
+      end
+    catch
+      :exit, _reason ->
+        Process.demonitor(agent_monitor, [:flush])
+        {:error, :not_spawning}
+    end
+  end
 
   defp start_job_worker(config, job, callers) do
     parent = self()

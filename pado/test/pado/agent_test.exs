@@ -88,16 +88,22 @@ defmodule Pado.AgentTest do
 
   describe "stream/2 라이프사이클 enforcement" do
     test "stream/2를 여러 번 호출하면 각각 구독 스트림을 반환한다" do
+      Pado.Test.FakeLLM.put_response(
+        gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
+      )
+
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
 
       assert {:ok, _stream1} = Agent.stream(agent, job)
+      assert_receive {:llm_stream_waiting, worker_pid}, 500
       assert {:ok, _stream2} = Agent.stream(agent, job)
 
       Process.exit(agent, :kill)
+      Process.exit(worker_pid, :kill)
     end
 
-    test "이미 종료된 agent에 stream/2를 호출하면 에러 종료 이벤트 스트림을 반환한다" do
+    test "이미 종료된 agent에 stream/2를 호출하면 {:error, :not_spawning}" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
       {config, job} = build_setup([])
@@ -107,8 +113,7 @@ defmodule Pado.AgentTest do
 
       wait_until_dead(agent)
 
-      assert {:ok, stream} = Agent.stream(agent, job)
-      assert [{:job_end, %{job_id: nil, status: :error, turns: []}}] = Enum.to_list(stream)
+      assert {:error, :not_spawning} = Agent.stream(agent, job)
     end
   end
 

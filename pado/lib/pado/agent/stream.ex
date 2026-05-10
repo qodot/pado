@@ -1,47 +1,13 @@
 defmodule Pado.Agent.Stream do
-  alias Pado.Agent.{Event, Job}
+  alias Pado.Agent.Event
 
-  @spec build(pid(), Job.t()) :: Enumerable.t()
-  def build(agent, %Job{} = job) when is_pid(agent) do
+  @spec build(map()) :: Enumerable.t()
+  def build(subscription) when is_map(subscription) do
     Stream.resource(
-      fn -> subscribe(agent, job) end,
+      fn -> subscription end,
       &receive_event/1,
       &cleanup_subscription/1
     )
-  end
-
-  defp subscribe(agent, job) do
-    subscription_ref = make_ref()
-    agent_monitor = Process.monitor(agent)
-    callers = [self() | Process.get(:"$callers", [])]
-
-    try do
-      case GenServer.call(agent, {:subscribe, job, self(), subscription_ref, callers}) do
-        :ok ->
-          %{
-            agent: agent,
-            agent_monitor: agent_monitor,
-            subscription_ref: subscription_ref,
-            halted: false,
-            pending: []
-          }
-      end
-    catch
-      :exit, reason ->
-        Process.demonitor(agent_monitor, [:flush])
-
-        %{
-          agent: agent,
-          agent_monitor: nil,
-          subscription_ref: subscription_ref,
-          halted: false,
-          pending: [agent_down_event(reason)]
-        }
-    end
-  end
-
-  defp receive_event(%{pending: [event | rest]} = state) do
-    {[event], %{state | pending: rest, halted: Event.terminal?(event)}}
   end
 
   defp receive_event(%{halted: true} = state), do: {:halt, state}
@@ -59,8 +25,6 @@ defmodule Pado.Agent.Stream do
         {[agent_down_event(reason)], %{state | halted: true}}
     end
   end
-
-  defp cleanup_subscription(%{agent_monitor: nil}), do: :ok
 
   defp cleanup_subscription(%{agent: agent, agent_monitor: agent_monitor, subscription_ref: ref}) do
     GenServer.cast(agent, {:unsubscribe, ref})
