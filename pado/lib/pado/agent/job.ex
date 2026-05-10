@@ -50,10 +50,10 @@ defmodule Pado.Agent.Job do
     {pid, ref}
   end
 
-  @spec cancel(pid() | nil, reference() | nil) :: :ok
-  def cancel(nil, _monitor_ref), do: :ok
+  @spec abort(pid() | nil, reference() | nil) :: :ok
+  def abort(nil, _monitor_ref), do: :ok
 
-  def cancel(pid, monitor_ref) when is_pid(pid) and is_reference(monitor_ref) do
+  def abort(pid, monitor_ref) when is_pid(pid) and is_reference(monitor_ref) do
     Process.demonitor(monitor_ref, [:flush])
     Process.exit(pid, :shutdown)
     :ok

@@ -4,16 +4,16 @@ defmodule Pado.Agent.JobTest do
   alias Pado.Agent.{Job, Turn}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
-  describe "cancel/2" do
+  describe "abort/2" do
     test "pid가 nil이면 아무 작업 없이 :ok를 반환한다" do
-      assert :ok = Job.cancel(nil, nil)
+      assert :ok = Job.abort(nil, nil)
     end
 
     test "worker 프로세스를 종료하고 monitor DOWN 메시지를 flush한다" do
       worker = spawn(fn -> Process.sleep(:infinity) end)
       monitor_ref = Process.monitor(worker)
 
-      assert :ok = Job.cancel(worker, monitor_ref)
+      assert :ok = Job.abort(worker, monitor_ref)
       refute Process.alive?(worker)
       refute_receive {:DOWN, ^monitor_ref, :process, ^worker, _}, 50
     end
