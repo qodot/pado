@@ -1,0 +1,5 @@
+# robots.txt 사용법은 https://www.robotstxt.org/robotstxt.html 문서를 참고한다.
+#
+# 모든 크롤러의 전체 사이트 접근을 막으려면 다음 두 줄의 주석을 해제한다.
+# User-agent: *
+# Disallow: /
