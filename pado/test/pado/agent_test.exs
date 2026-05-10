@@ -19,13 +19,14 @@ defmodule Pado.AgentTest do
     :ok
   end
 
-  describe "spawn/1 + stream/2 정상 종료 경로" do
+  describe "spawn/1 + start/2 + Pado.Stream.subscribe/1 정상 종료 경로" do
     test "1턴 응답 → :job_start로 시작, :job_end status :done" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
 
       events = Enum.to_list(stream)
 
@@ -42,7 +43,8 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup(tools: [tool])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
 
       events = Enum.to_list(stream)
 
@@ -59,7 +61,8 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup(max_turns: 1, tools: [tool])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
 
       events = Enum.to_list(stream)
       assert {:job_end, %{status: :max_turns, turns: [_]}} = List.last(events)
@@ -79,41 +82,41 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
 
       assert {:job_end, %{status: :error, reason: "boom"}} =
                stream |> Enum.to_list() |> List.last()
     end
   end
 
-  describe "stream/2 라이프사이클 enforcement" do
-    test "stream/2를 여러 번 호출하면 각각 구독 스트림을 반환한다" do
-      Pado.Test.FakeLLM.put_response(
-        gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
-      )
-
+  describe "Pado.Stream.subscribe/1 라이프사이클 enforcement" do
+    test "여러 번 호출하면 각각 스트림을 반환한다" do
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
+      :ok = Agent.start(agent, job)
 
-      assert {:ok, _stream1} = Agent.stream(agent, job)
-      assert_receive {:llm_stream_waiting, worker_pid}, 500
-      assert {:ok, _stream2} = Agent.stream(agent, job)
+      assert stream1 = Pado.Stream.subscribe(agent)
+      assert stream2 = Pado.Stream.subscribe(agent)
+      assert is_function(stream1)
+      assert is_function(stream2)
 
       Process.exit(agent, :kill)
-      Process.exit(worker_pid, :kill)
     end
 
-    test "이미 종료된 agent에 stream/2를 호출하면 {:error, :not_spawning}" do
+    test "이미 종료된 agent를 구독하면 에러 종료 이벤트 스트림을 반환한다" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
       _ = Enum.to_list(stream)
 
       wait_until_dead(agent)
 
-      assert {:error, :not_spawning} = Agent.stream(agent, job)
+      stream = Pado.Stream.subscribe(agent)
+      assert [{:job_end, %{job_id: nil, status: :error, turns: []}}] = Enum.to_list(stream)
     end
   end
 
@@ -125,10 +128,11 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
+      :ok = Agent.start(agent, job)
 
       subscriber1 =
         Task.async(fn ->
-          {:ok, stream} = Agent.stream(agent, job)
+          stream = Pado.Stream.subscribe(agent)
           Enum.to_list(stream)
         end)
 
@@ -136,7 +140,7 @@ defmodule Pado.AgentTest do
 
       subscriber2 =
         Task.async(fn ->
-          {:ok, stream} = Agent.stream(agent, job)
+          stream = Pado.Stream.subscribe(agent)
           Enum.to_list(stream)
         end)
 
@@ -161,10 +165,11 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
+      :ok = Agent.start(agent, job)
 
       live_subscriber =
         Task.async(fn ->
-          {:ok, stream} = Agent.stream(agent, job)
+          stream = Pado.Stream.subscribe(agent)
           Enum.to_list(stream)
         end)
 
@@ -172,7 +177,7 @@ defmodule Pado.AgentTest do
 
       dead_subscriber =
         spawn(fn ->
-          {:ok, stream} = Agent.stream(agent, job)
+          stream = Pado.Stream.subscribe(agent)
           Enum.to_list(stream)
         end)
 
@@ -197,7 +202,8 @@ defmodule Pado.AgentTest do
 
       {config, job} = build_setup([])
       {:ok, agent} = Agent.spawn(config)
-      {:ok, stream} = Agent.stream(agent, job)
+      :ok = Agent.start(agent, job)
+      stream = Pado.Stream.subscribe(agent)
 
       assert [{:job_start, %{job_id: "j1"}}] = Enum.take(stream, 1)
 

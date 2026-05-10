@@ -1,7 +1,7 @@
 defmodule Pado.Agent do
   use GenServer
 
-  alias Pado.Agent.{Job, Stream, Turn}
+  alias Pado.Agent.{Job, Turn}
   alias Pado.AgentConfig
 
   @type t :: pid()
@@ -11,23 +11,23 @@ defmodule Pado.Agent do
     GenServer.start(__MODULE__, config)
   end
 
-  @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()} | {:error, :not_spawning}
-  def stream(agent, %Job{} = job) when is_pid(agent) do
-    case subscribe(agent, job) do
-      {:ok, stream_ref, agent_monitor} -> {:ok, Stream.build(agent, stream_ref, agent_monitor)}
-      {:error, reason} -> {:error, reason}
+  @spec start(pid(), Job.t()) :: :ok | {:error, :not_spawning | :already_started}
+  def start(agent, %Job{} = job) when is_pid(agent) do
+    callers = [self() | Process.get(:"$callers", [])]
+
+    try do
+      GenServer.call(agent, {:start, job, callers})
+    catch
+      :exit, _reason -> {:error, :not_spawning}
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # GenServer 콜백
-  # ---------------------------------------------------------------------------
 
   @impl true
   def init(%AgentConfig{} = config) do
     state = %{
       config: config,
       job: nil,
+      callers: nil,
       subscribers: %{},
       job_worker_pid: nil,
       job_worker_monitor: nil
@@ -37,33 +37,40 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_call(
-        {:subscribe, %Job{} = job, subscriber, stream_ref, callers},
-        _from,
-        %{job: nil} = state
-      ) do
-    state = add_subscriber(state, subscriber, stream_ref)
-    notify(state, {:job_start, %{job_id: job.job_id}})
+  def handle_call({:start, %Job{} = job, callers}, _from, %{job: nil} = state) do
+    state = %{state | job: job, callers: callers}
+    {:reply, :ok, start_if_ready(state)}
+  end
 
-    {pid, ref} = start_job_worker(state.config, job, callers)
+  def handle_call({:start, %Job{}, _callers}, _from, state) do
+    {:reply, {:error, :already_started}, state}
+  end
 
-    {:reply, :ok,
-     %{
-       state
-       | job: job,
-         job_worker_pid: pid,
-         job_worker_monitor: ref
-     }}
+  def handle_call({:subscribe, subscriber, stream_ref}, _from, state) do
+    subscriber_monitor = Process.monitor(subscriber)
+
+    state = %{
+      state
+      | subscribers: state.subscribers |> Map.put(subscriber_monitor, {subscriber, stream_ref})
+    }
+
+    {:reply, :ok, start_if_ready(state)}
   end
 
   @impl true
-  def handle_call({:subscribe, %Job{}, subscriber, stream_ref, _callers}, _from, state) do
-    {:reply, :ok, add_subscriber(state, subscriber, stream_ref)}
-  end
+  def handle_cast({:unsubscribe, subscriber, stream_ref}, state) do
+    state =
+      case Enum.find(state.subscribers, fn {_, {pid, ref}} ->
+             pid == subscriber and ref == stream_ref
+           end) do
+        {monitor_ref, _} ->
+          Process.demonitor(monitor_ref, [:flush])
+          %{state | subscribers: Map.delete(state.subscribers, monitor_ref)}
 
-  @impl true
-  def handle_cast({:unsubscribe, stream_ref}, state) do
-    state = remove_subscriber(state, stream_ref)
+        nil ->
+          state
+      end
+
     stop_if_no_subscribers(state)
   end
 
@@ -80,6 +87,7 @@ defmodule Pado.Agent do
     state = %{
       state
       | job: job,
+        callers: nil,
         job_worker_pid: nil,
         job_worker_monitor: nil
     }
@@ -115,21 +123,14 @@ defmodule Pado.Agent do
   # 내부 도우미
   # ---------------------------------------------------------------------------
 
-  defp subscribe(agent, job) do
-    stream_ref = make_ref()
-    agent_monitor = Process.monitor(agent)
-    callers = [self() | Process.get(:"$callers", [])]
-
-    try do
-      case GenServer.call(agent, {:subscribe, job, self(), stream_ref, callers}) do
-        :ok -> {:ok, stream_ref, agent_monitor}
-      end
-    catch
-      :exit, _reason ->
-        Process.demonitor(agent_monitor, [:flush])
-        {:error, :not_spawning}
-    end
+  defp start_if_ready(%{job: %Job{}, job_worker_pid: nil, subscribers: subscribers} = state)
+       when map_size(subscribers) > 0 do
+    notify(state, {:job_start, %{job_id: state.job.job_id}})
+    {pid, ref} = start_job_worker(state.config, state.job, state.callers)
+    %{state | job_worker_pid: pid, job_worker_monitor: ref}
   end
+
+  defp start_if_ready(state), do: state
 
   defp start_job_worker(config, job, callers) do
     parent = self()
@@ -157,23 +158,6 @@ defmodule Pado.Agent do
       {:error, job} ->
         reason = List.last(job.turns).assistant.error_message
         {:error, reason, job}
-    end
-  end
-
-  defp add_subscriber(state, subscriber, stream_ref) do
-    monitor_ref = Process.monitor(subscriber)
-    subscribers = Map.put(state.subscribers, monitor_ref, {subscriber, stream_ref})
-    %{state | subscribers: subscribers}
-  end
-
-  defp remove_subscriber(state, stream_ref) do
-    case Enum.find(state.subscribers, fn {_, {_, ref}} -> ref == stream_ref end) do
-      {monitor_ref, _} ->
-        Process.demonitor(monitor_ref, [:flush])
-        %{state | subscribers: Map.delete(state.subscribers, monitor_ref)}
-
-      nil ->
-        state
     end
   end
 
