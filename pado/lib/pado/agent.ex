@@ -15,15 +15,9 @@ defmodule Pado.Agent do
     GenServer.start(__MODULE__, config)
   end
 
-  @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()} | {:error, :not_spawning}
+  @spec stream(pid(), Job.t()) :: {:ok, Enumerable.t()}
   def stream(agent, %Job{} = job) when is_pid(agent) do
-    try do
-      case GenServer.call(agent, :stream_available) do
-        :ok -> {:ok, build_stream(agent, job)}
-      end
-    catch
-      :exit, _ -> {:error, :not_spawning}
-    end
+    {:ok, build_stream(agent, job)}
   end
 
   # ---------------------------------------------------------------------------
@@ -44,10 +38,6 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_call(:stream_available, _from, state) do
-    {:reply, :ok, state}
-  end
-
   def handle_call(
         {:subscribe, %Job{} = job, subscriber, subscription_ref, callers},
         _from,

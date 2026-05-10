@@ -97,7 +97,7 @@ defmodule Pado.AgentTest do
       Process.exit(agent, :kill)
     end
 
-    test "이미 종료된 agent에 stream/2를 호출하면 {:error, :not_spawning}" do
+    test "이미 종료된 agent에 stream/2를 호출하면 에러 종료 이벤트 스트림을 반환한다" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
       {config, job} = build_setup([])
@@ -107,7 +107,8 @@ defmodule Pado.AgentTest do
 
       wait_until_dead(agent)
 
-      assert {:error, :not_spawning} = Agent.stream(agent, job)
+      assert {:ok, stream} = Agent.stream(agent, job)
+      assert [{:job_end, %{job_id: nil, status: :error, turns: []}}] = Enum.to_list(stream)
     end
   end
 
