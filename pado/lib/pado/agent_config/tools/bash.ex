@@ -40,8 +40,14 @@ defmodule Pado.AgentConfig.Tools.Bash do
             "required" => ["command"]
           }
         ),
-      execute: fn args, ctx -> execute(args, ctx, timeout) end
+      async: fn args, ctx -> Task.async(fn -> execute(args, ctx, timeout) end) end,
+      abort: &abort/1
     }
+  end
+
+  def abort(%Task{} = task) do
+    Task.shutdown(task, :brutal_kill)
+    :ok
   end
 
   defp execute(%{"command" => cmd} = args, _ctx, timeout) when is_binary(cmd) do

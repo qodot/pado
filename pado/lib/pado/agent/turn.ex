@@ -14,7 +14,9 @@ defmodule Pado.Agent.Turn do
           usage: Usage.t() | nil
         }
 
-  @type send_job_event_fun :: (Event.t() -> any())
+  @tool_timeout_ms 60_000
+
+  @type send_job_event_fun :: (term() -> any())
 
   @enforce_keys [:index, :assistant]
   defstruct [:index, :assistant, tool_results: [], usage: nil]
@@ -118,32 +120,41 @@ defmodule Pado.Agent.Turn do
     assistant
     |> tool_calls()
     |> Enum.map(fn call ->
-      send_job_event.(
-        {:tool_execution_start,
-         %{
-           job_id: job.job_id,
-           turn_index: turn_index,
-           tool_call_id: call.id,
-           tool_name: call.name,
-           args: call.args
-         }}
-      )
+      case start_tool(call, agent.harness.tools) do
+        {:ok, task, abort} ->
+          send_job_event.(
+            {:tool_execution_start,
+             %{
+               job_id: job.job_id,
+               turn_index: turn_index,
+               tool_call_id: call.id,
+               tool_name: call.name,
+               args: call.args,
+               tool_call: call,
+               task: task,
+               abort: abort
+             }}
+          )
 
-      result = dispatch_tool(call, agent.harness.tools)
+          result = dispatch_tool(call, task)
 
-      send_job_event.(
-        {:tool_execution_end,
-         %{
-           job_id: job.job_id,
-           turn_index: turn_index,
-           tool_call_id: call.id,
-           tool_name: call.name,
-           result: result,
-           is_error: result.is_error
-         }}
-      )
+          send_job_event.(
+            {:tool_execution_end,
+             %{
+               job_id: job.job_id,
+               turn_index: turn_index,
+               tool_call_id: call.id,
+               tool_name: call.name,
+               result: result,
+               is_error: result.is_error
+             }}
+          )
 
-      result
+          result
+
+        {:error, result} ->
+          result
+      end
     end)
   end
 
@@ -163,20 +174,44 @@ defmodule Pado.Agent.Turn do
   end
 
   @doc false
-  @spec dispatch_tool(Message.tool_call(), [Tool.t()]) :: ToolResult.t()
-  def dispatch_tool(%{id: id, name: name, args: args}, tools) do
+  @spec start_tool(Message.tool_call(), [Tool.t()]) ::
+          {:ok, Task.t(), (Task.t() -> any())} | {:error, ToolResult.t()}
+  def start_tool(%{id: id, name: name, args: args}, tools) do
     case find_tool(tools, name) do
-      nil ->
-        ToolResult.error(id, name, "unknown tool: #{name}")
+      nil -> {:error, ToolResult.error(id, name, "unknown tool: #{name}")}
+      %Tool{async: async, abort: abort} -> {:ok, async.(args, %{}), abort}
+    end
+  end
 
-      %Tool{execute: execute} ->
-        try do
-          output = execute.(args, %{})
+  @doc false
+  @spec dispatch_tool(Message.tool_call(), Task.t()) :: ToolResult.t()
+  def dispatch_tool(%{id: id, name: name}, task) do
+    trap_exit = Process.flag(:trap_exit, true)
+
+    try do
+      case await_tool(task) do
+        {:ok, output} ->
           text = if is_binary(output), do: output, else: inspect(output)
           ToolResult.text(id, name, text)
-        rescue
-          e -> ToolResult.error(id, name, Exception.message(e))
-        end
+
+        {:error, message} ->
+          ToolResult.error(id, name, message)
+      end
+    rescue
+      e -> ToolResult.error(id, name, Exception.message(e))
+    catch
+      :exit, reason ->
+        ToolResult.error(id, name, "tool task exited: " <> inspect(reason))
+    after
+      Process.flag(:trap_exit, trap_exit)
+    end
+  end
+
+  defp await_tool(task) do
+    case Task.yield(task, @tool_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, output} -> {:ok, output}
+      {:exit, reason} -> {:error, "tool task exited: " <> inspect(reason)}
+      nil -> {:error, "tool task timed out"}
     end
   end
 

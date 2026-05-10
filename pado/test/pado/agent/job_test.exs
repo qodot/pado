@@ -17,11 +17,57 @@ defmodule Pado.Agent.JobTest do
       refute Process.alive?(worker)
       refute_receive {:DOWN, ^monitor_ref, :process, ^worker, _}, 50
     end
+
+    test "실행 중인 tool abort를 실행한다" do
+      parent = self()
+      tool_task = Task.async(fn -> Process.sleep(:infinity) end)
+      worker = spawn(fn -> Process.sleep(:infinity) end)
+      monitor_ref = Process.monitor(worker)
+
+      job = %{
+        build_job()
+        | running_tools: %{
+            "c1" => %{
+              task: tool_task,
+              abort: fn task ->
+                send(parent, {:tool_aborted, task.pid})
+                Task.shutdown(task, :brutal_kill)
+              end
+            }
+          }
+      }
+
+      assert :ok = Job.abort(job, worker, monitor_ref)
+      assert_receive {:tool_aborted, pid} when pid == tool_task.pid
+      refute Process.alive?(tool_task.pid)
+    end
   end
 
-  describe "기본 상태" do
-    test "running_tools는 빈 맵으로 시작한다" do
+  describe "running_tools" do
+    test "기본값은 빈 맵이다" do
       assert %Job{running_tools: %{}} = build_job()
+    end
+
+    test "실행 중인 tool task를 등록하고 제거한다" do
+      task = Task.async(fn -> :ok end)
+      call = %{id: "c1", name: "echo"}
+
+      abort = fn _ -> :ok end
+      job = build_job() |> Job.start_tool(call, task, abort)
+
+      assert job.running_tools == %{
+               "c1" => %{
+                 id: "c1",
+                 name: "echo",
+                 task: task,
+                 pid: task.pid,
+                 ref: task.ref,
+                 abort: abort
+               }
+             }
+
+      assert %{running_tools: %{}} = Job.finish_tool(job, "c1")
+      assert :ok = Task.await(task)
     end
   end
 

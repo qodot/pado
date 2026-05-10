@@ -78,6 +78,18 @@ defmodule Pado.Agent do
   end
 
   @impl true
+  def handle_info({:receive_job_event, {:tool_execution_start, data} = event}, state) do
+    job = Job.start_tool(state.job, data.tool_call, data.task, data.abort)
+    notify(%{state | job: job}, sanitize_tool_event(event))
+    {:noreply, %{state | job: job}}
+  end
+
+  def handle_info({:receive_job_event, {:tool_execution_end, data} = event}, state) do
+    job = Job.finish_tool(state.job, data.tool_call_id)
+    notify(%{state | job: job}, event)
+    {:noreply, %{state | job: job}}
+  end
+
   def handle_info({:receive_job_event, {:job_end, %{job: job} = data}}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
 
@@ -140,11 +152,16 @@ defmodule Pado.Agent do
 
   defp stop_if_no_subscribers(%{subscribers: subscribers} = state)
        when map_size(subscribers) == 0 do
-    Job.abort(state.job_worker_pid, state.job_worker_monitor)
+    Job.abort(state.job, state.job_worker_pid, state.job_worker_monitor)
     {:stop, :normal, state}
   end
 
   defp stop_if_no_subscribers(state), do: {:noreply, state}
+
+  defp sanitize_tool_event({:tool_execution_start, data}) do
+    {:tool_execution_start,
+     data |> Map.delete(:tool_call) |> Map.delete(:task) |> Map.delete(:abort)}
+  end
 
   defp notify(%{subscribers: subscribers}, event) do
     Enum.each(subscribers, fn {_, {subscriber, stream_ref}} ->

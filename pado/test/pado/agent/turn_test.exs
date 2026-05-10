@@ -339,8 +339,13 @@ defmodule Pado.Agent.TurnTest do
                           turn_index: 1,
                           tool_call_id: "c1",
                           tool_name: "echo",
-                          args: %{"k" => "v"}
+                          args: %{"k" => "v"},
+                          tool_call: %{id: "c1", name: "echo"},
+                          task: %Task{},
+                          abort: abort
                         }}}
+
+      assert is_function(abort, 1)
 
       assert_received {:sent_event,
                        {:tool_execution_end,
@@ -451,19 +456,20 @@ defmodule Pado.Agent.TurnTest do
     end
   end
 
-  describe "dispatch_tool/2" do
+  describe "start_tool/2 + dispatch_tool/2" do
     test "알 수 없는 tool은 ToolResult.error를 반환한다" do
       call = %{id: "c1", name: "missing", args: %{}}
-      result = Turn.dispatch_tool(call, [])
 
-      assert %ToolResult{tool_call_id: "c1", tool_name: "missing", is_error: true} = result
+      assert {:error, %ToolResult{tool_call_id: "c1", tool_name: "missing", is_error: true}} =
+               Turn.start_tool(call, [])
     end
 
     test "정상 실행 후 string을 반환하면 ToolResult.text를 반환한다" do
       tools = [make_tool("echo", fn args, _ -> args["text"] end)]
       call = %{id: "c1", name: "echo", args: %{"text" => "hello"}}
 
-      result = Turn.dispatch_tool(call, tools)
+      {:ok, task, _abort} = Turn.start_tool(call, tools)
+      result = Turn.dispatch_tool(call, task)
       assert %ToolResult{is_error: false, content: [{:text, "hello"}]} = result
     end
 
@@ -471,7 +477,8 @@ defmodule Pado.Agent.TurnTest do
       tools = [make_tool("sum", fn args, _ -> args["a"] + args["b"] end)]
       call = %{id: "c1", name: "sum", args: %{"a" => 1, "b" => 2}}
 
-      result = Turn.dispatch_tool(call, tools)
+      {:ok, task, _abort} = Turn.start_tool(call, tools)
+      result = Turn.dispatch_tool(call, task)
       assert %ToolResult{is_error: false, content: [{:text, "3"}]} = result
     end
 
@@ -479,17 +486,19 @@ defmodule Pado.Agent.TurnTest do
       tools = [make_tool("boom", fn _, _ -> raise "폭발" end)]
       call = %{id: "c1", name: "boom", args: %{}}
 
-      result = Turn.dispatch_tool(call, tools)
+      {:ok, task, _abort} = Turn.start_tool(call, tools)
+      result = Turn.dispatch_tool(call, task)
       assert %ToolResult{is_error: true} = result
       assert [{:text, msg}] = result.content
-      assert msg =~ "폭발"
+      assert msg =~ "tool task exited"
     end
   end
 
   defp make_tool(name, execute) do
     %Tool{
       schema: LLMTool.new(name, "테스트 도구", %{}),
-      execute: execute
+      async: fn args, ctx -> Task.async(fn -> execute.(args, ctx) end) end,
+      abort: fn task -> Task.shutdown(task, :brutal_kill) end
     }
   end
 

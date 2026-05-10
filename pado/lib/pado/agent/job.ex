@@ -50,6 +50,26 @@ defmodule Pado.Agent.Job do
     {pid, ref}
   end
 
+  @spec start_tool(t(), map(), Task.t(), (Task.t() -> any())) :: t()
+  def start_tool(%__MODULE__{} = job, %{id: id, name: name}, %Task{} = task, abort) do
+    running_tool = %{id: id, name: name, task: task, pid: task.pid, ref: task.ref, abort: abort}
+    %{job | running_tools: Map.put(job.running_tools, id, running_tool)}
+  end
+
+  @spec finish_tool(t(), String.t()) :: t()
+  def finish_tool(%__MODULE__{} = job, tool_call_id) do
+    %{job | running_tools: Map.delete(job.running_tools, tool_call_id)}
+  end
+
+  @spec abort(t(), pid() | nil, reference() | nil) :: :ok
+  def abort(%__MODULE__{} = job, pid, monitor_ref) do
+    job.running_tools
+    |> Map.values()
+    |> Enum.each(fn %{task: task, abort: abort} -> abort.(task) end)
+
+    abort(pid, monitor_ref)
+  end
+
   @spec abort(pid() | nil, reference() | nil) :: :ok
   def abort(nil, _monitor_ref), do: :ok
 

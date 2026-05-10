@@ -24,7 +24,8 @@ defmodule Pado.AgentConfigTest do
           tools: [
             %AgentTool{
               schema: tool_schema,
-              execute: fn _, _ -> "ok" end
+              async: fn _, _ -> Task.async(fn -> "ok" end) end,
+              abort: fn task -> Task.shutdown(task, :brutal_kill) end
             }
           ]
         }
