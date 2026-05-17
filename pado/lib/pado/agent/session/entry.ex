@@ -1,5 +1,6 @@
 defmodule Pado.Agent.Session.Entry do
   alias Pado.Agent.Session.{CompactionSummary, Error, ModelChange}
+  alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
 
@@ -38,6 +39,33 @@ defmodule Pado.Agent.Session.Entry do
     refs: %{}
   ]
 
+  @spec from_message(Message.t(), non_neg_integer(), keyword()) :: t()
+  def from_message(message, seq, opts \\ [])
+
+  def from_message(%User{} = message, seq, opts) do
+    build(:user, message, seq, opts)
+  end
+
+  def from_message(%Assistant{} = message, seq, opts) do
+    refs =
+      message.content
+      |> Enum.flat_map(fn
+        {:tool_call, %{id: id}} -> [id]
+        _ -> []
+      end)
+      |> case do
+        [] -> %{}
+        ids -> %{"tool_call_ids" => ids}
+      end
+
+    build(:assistant, message, seq, Keyword.put_new(opts, :refs, refs))
+  end
+
+  def from_message(%ToolResult{} = message, seq, opts) do
+    refs = %{"tool_call_id" => message.tool_call_id}
+    build(:tool_result, message, seq, Keyword.put_new(opts, :refs, refs))
+  end
+
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = entry) do
     %{
@@ -69,6 +97,21 @@ defmodule Pado.Agent.Session.Entry do
   end
 
   def from_map(map), do: {:error, {:invalid_entry_map, map}}
+
+  defp build(kind, payload, seq, opts) do
+    %__MODULE__{
+      id: Keyword.get(opts, :id, new_id()),
+      seq: seq,
+      kind: kind,
+      payload: payload,
+      refs: Keyword.get(opts, :refs, %{}),
+      timestamp: Keyword.get(opts, :timestamp, DateTime.utc_now())
+    }
+  end
+
+  defp new_id do
+    "entry-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+  end
 
   defp encode_payload(:user, %User{} = message) do
     %{

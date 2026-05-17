@@ -1,20 +1,47 @@
 defmodule Pado.Agent do
   use GenServer
 
-  alias Pado.Agent.Job
+  alias Pado.Agent.{Job, Session, Turn}
+  alias Pado.Agent.Session.Store
   alias Pado.AgentConfig
+  alias Pado.LLM.Message.User
 
   @type t :: pid()
 
   @spec spawn(AgentConfig.t()) :: {:ok, pid()}
-  def spawn(%AgentConfig{} = config) do
-    GenServer.start(__MODULE__, config)
+  def spawn(%AgentConfig{} = config), do: spawn(config, [])
+
+  @spec spawn(AgentConfig.t(), keyword()) :: {:ok, pid()}
+  def spawn(%AgentConfig{} = config, opts) when is_list(opts) do
+    GenServer.start(__MODULE__, {config, opts})
+  end
+
+  @spec start(pid(), Job.t() | User.t() | String.t(), keyword()) :: :ok | {:error, term()}
+  def start(agent, input, opts \\ [])
+
+  def start(agent, %Job{} = job, []) when is_pid(agent) do
+    GenServer.call(agent, {:start_job, self(), job, callers()})
+  end
+
+  def start(agent, %User{} = user, opts) when is_pid(agent) and is_list(opts) do
+    GenServer.call(agent, {:start_session_job, user, opts, callers()})
+  end
+
+  def start(agent, content, opts) when is_pid(agent) and is_binary(content) and is_list(opts) do
+    start(agent, User.new(content), opts)
   end
 
   @impl true
-  def init(%AgentConfig{} = config) do
+  def init(%AgentConfig{} = config), do: init({config, []})
+
+  def init({%AgentConfig{} = config, opts}) when is_list(opts) do
+    session = Keyword.get(opts, :session)
+    session_store = Keyword.get(opts, :store)
+
     state = %{
       config: config,
+      session: session,
+      session_store: session_store,
       job: nil,
       callers: nil,
       subscribers: %{},
@@ -22,30 +49,43 @@ defmodule Pado.Agent do
       job_worker_monitor: nil
     }
 
-    {:ok, state}
+    case save_initial_session(session, session_store) do
+      :ok -> {:ok, state}
+      {:error, reason} -> {:stop, reason}
+    end
   end
 
   @impl true
   def handle_call({:start_job, _subscriber, %Job{} = job, callers}, _from, %{job: nil} = state) do
-    notify(state, {:job_start, %{job_id: job.job_id}})
-    parent = self()
-
-    send_job_event = fn event -> send(parent, {:receive_job_event, event}) end
-
-    {pid, ref} =
-      Job.run(job, state.config, callers, send_job_event)
-
-    {:reply, :ok,
-     %{
-       state
-       | job: job,
-         callers: callers,
-         job_worker_pid: pid,
-         job_worker_monitor: ref
-     }}
+    {:reply, :ok, start_job(state, job, callers)}
   end
 
   def handle_call({:start_job, _subscriber, %Job{}, _callers}, _from, state) do
+    {:reply, {:error, :already_started}, state}
+  end
+
+  def handle_call(
+        {:start_session_job, %User{} = user, opts, callers},
+        _from,
+        %{job: nil, session: %Session{} = session} = state
+      ) do
+    {session, entries} = Session.append_messages(session, [user])
+
+    case persist_session_entries(state, entries) do
+      :ok ->
+        job = build_job(session, opts)
+        {:reply, :ok, start_job(%{state | session: session}, job, callers)}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:start_session_job, %User{}, _opts, _callers}, _from, %{job: nil} = state) do
+    {:reply, {:error, :missing_session}, state}
+  end
+
+  def handle_call({:start_session_job, %User{}, _opts, _callers}, _from, state) do
     {:reply, {:error, :already_started}, state}
   end
 
@@ -109,6 +149,7 @@ defmodule Pado.Agent do
 
   def handle_info({:receive_job_event, {:job_end, %{job: job} = data}}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
+    {state, data} = commit_session_turns(state, job, data)
 
     state = %{
       state
@@ -171,9 +212,77 @@ defmodule Pado.Agent do
 
   defp stop_if_no_subscribers(state), do: {:noreply, state}
 
+  defp start_job(state, %Job{} = job, callers) do
+    notify(state, {:job_start, %{job_id: job.job_id}})
+    parent = self()
+
+    send_job_event = fn event -> send(parent, {:receive_job_event, event}) end
+
+    {pid, ref} =
+      Job.run(job, state.config, callers, send_job_event)
+
+    %{
+      state
+      | job: job,
+        callers: callers,
+        job_worker_pid: pid,
+        job_worker_monitor: ref
+    }
+  end
+
+  defp build_job(%Session{} = session, opts) do
+    %Job{
+      messages: Session.to_llm_messages(session),
+      session_id: session.id,
+      job_id: Keyword.get(opts, :job_id, new_job_id()),
+      max_turns: Keyword.get(opts, :max_turns, 10)
+    }
+  end
+
+  defp commit_session_turns(%{session: nil} = state, _job, data), do: {state, data}
+
+  defp commit_session_turns(%{session: %Session{} = session} = state, %Job{} = job, data) do
+    messages = Enum.flat_map(job.turns, &Turn.as_llm_messages/1)
+    {session, entries} = Session.append_messages(session, messages)
+    data = Map.put(data, :session, session)
+
+    case persist_session_entries(state, entries) do
+      :ok ->
+        {%{state | session: session}, data}
+
+      {:error, reason} ->
+        {%{state | session: session}, Map.put(data, :session_persist_error, reason)}
+    end
+  end
+
+  defp persist_session_entries(%{session_store: nil}, _entries), do: :ok
+  defp persist_session_entries(_state, []), do: :ok
+
+  defp persist_session_entries(
+         %{session: %Session{id: session_id}, session_store: store},
+         entries
+       ) do
+    Store.append(store, session_id, entries)
+  end
+
+  defp save_initial_session(nil, _store), do: :ok
+  defp save_initial_session(_session, nil), do: :ok
+
+  defp save_initial_session(%Session{} = session, store) do
+    Store.save(store, session)
+  end
+
   defp sanitize_tool_event({:tool_execution_start, data}) do
     {:tool_execution_start,
      data |> Map.delete(:tool_call) |> Map.delete(:task) |> Map.delete(:abort)}
+  end
+
+  defp callers do
+    [self() | Process.get(:"$callers", [])]
+  end
+
+  defp new_job_id do
+    "job-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
   end
 
   defp notify(%{subscribers: subscribers}, event) do

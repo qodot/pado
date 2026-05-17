@@ -1,5 +1,7 @@
 defmodule Pado.Agent.Session do
   alias Pado.Agent.Session.Entry
+  alias Pado.LLM.Message
+  alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -17,6 +19,35 @@ defmodule Pado.Agent.Session do
     version: 1,
     entries: []
   ]
+
+  @spec to_llm_messages(t()) :: [Message.t()]
+  def to_llm_messages(%__MODULE__{} = session) do
+    session.entries
+    |> Enum.flat_map(fn
+      %Entry{kind: :user, payload: %User{} = message} -> [message]
+      %Entry{kind: :assistant, payload: %Assistant{} = message} -> [message]
+      %Entry{kind: :tool_result, payload: %ToolResult{} = message} -> [message]
+      _ -> []
+    end)
+  end
+
+  @spec append_messages(t(), [Message.t()], keyword()) :: {t(), [Entry.t()]}
+  def append_messages(%__MODULE__{} = session, messages, opts \\ []) when is_list(messages) do
+    timestamp = Keyword.get(opts, :timestamp, DateTime.utc_now())
+    first_seq = next_seq(session)
+
+    entries =
+      messages
+      |> Enum.with_index(first_seq)
+      |> Enum.map(fn {message, seq} ->
+        Entry.from_message(message, seq, timestamp: timestamp)
+      end)
+
+    {
+      %{session | entries: session.entries ++ entries, updated_at: timestamp},
+      entries
+    }
+  end
 
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = session) do
@@ -47,6 +78,15 @@ defmodule Pado.Agent.Session do
   end
 
   def from_map(map), do: {:error, {:invalid_session_map, map}}
+
+  defp next_seq(%__MODULE__{entries: []}), do: 0
+
+  defp next_seq(%__MODULE__{entries: entries}) do
+    entries
+    |> List.last()
+    |> Map.fetch!(:seq)
+    |> Kernel.+(1)
+  end
 
   defp decode_entries(entries) when is_list(entries) do
     entries
