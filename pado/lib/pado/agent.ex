@@ -147,9 +147,15 @@ defmodule Pado.Agent do
     {:noreply, %{state | job: job}}
   end
 
+  def handle_info({:receive_job_event, {:turn_end, %{turn: turn}} = event}, state) do
+    {state, event} = append_turn_to_session(state, turn, event)
+    notify(state, event)
+    {:noreply, state}
+  end
+
   def handle_info({:receive_job_event, {:job_end, %{job: job} = data}}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
-    {state, data} = commit_session_turns(state, job, data)
+    data = maybe_put_session(data, state.session)
 
     state = %{
       state
@@ -239,21 +245,27 @@ defmodule Pado.Agent do
     }
   end
 
-  defp commit_session_turns(%{session: nil} = state, _job, data), do: {state, data}
+  defp append_turn_to_session(%{session: nil} = state, _turn, event), do: {state, event}
 
-  defp commit_session_turns(%{session: %Session{} = session} = state, %Job{} = job, data) do
-    messages = Enum.flat_map(job.turns, &Turn.as_llm_messages/1)
+  defp append_turn_to_session(%{session: %Session{} = session} = state, %Turn{} = turn, event) do
+    messages = Turn.as_llm_messages(turn)
     {session, entries} = Session.append_messages(session, messages)
-    data = Map.put(data, :session, session)
 
     case persist_session_entries(state, entries) do
       :ok ->
-        {%{state | session: session}, data}
+        {%{state | session: session, job: append_turn(state.job, turn)}, event}
 
       {:error, reason} ->
-        {%{state | session: session}, Map.put(data, :session_persist_error, reason)}
+        event = put_in(event, [Access.elem(1), :session_persist_error], reason)
+        {%{state | session: session, job: append_turn(state.job, turn)}, event}
     end
   end
+
+  defp append_turn(%Job{} = job, %Turn{} = turn), do: %{job | turns: job.turns ++ [turn]}
+  defp append_turn(job, _turn), do: job
+
+  defp maybe_put_session(data, nil), do: data
+  defp maybe_put_session(data, %Session{} = session), do: Map.put(data, :session, session)
 
   defp persist_session_entries(%{session_store: nil}, _entries), do: :ok
   defp persist_session_entries(_state, []), do: :ok

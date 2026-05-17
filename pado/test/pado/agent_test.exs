@@ -125,6 +125,48 @@ defmodule Pado.AgentTest do
       assert {:job_end, %{session: %Session{}}} = List.last(events)
     end
 
+    test "tool turn마다 세션 store에 append한다" do
+      tool = %Pado.AgentConfig.Tools.Tool{
+        schema: Pado.LLM.Tool.new("echo", "d", %{}),
+        async: fn _args, _ctx -> Task.async(fn -> "result" end) end,
+        abort: fn task -> Task.shutdown(task, :brutal_kill) end
+      }
+
+      config = %{config() | harness: %Harness{tools: [tool]}}
+
+      session = session([])
+
+      asst1 = %Assistant{
+        content: [{:tool_call, %{id: "call-1", name: "echo", args: %{}}}],
+        timestamp: now()
+      }
+
+      asst2 = %Assistant{content: [{:text, "done"}], timestamp: now()}
+
+      Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
+
+      {:ok, agent} = Agent.spawn(config, session: session, store: {Store, owner: self()})
+      assert_receive {:store_save, ^session}
+
+      collector = collect_stream(agent)
+
+      assert :ok = wait_until_subscriber_count(agent, 1)
+      assert :ok = Agent.start(agent, "next", job_id: "job-1")
+
+      assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
+
+      assert_receive {:store_append, "session-1",
+                      [%Entry{kind: :assistant}, %Entry{kind: :tool_result}]}
+
+      assert_receive {:store_append, "session-1", [%Entry{kind: :assistant}]}
+
+      events = Task.await(collector, 500)
+
+      assert {:job_end, %{session: %Session{} = updated, turns: [_, _]}} = List.last(events)
+      assert Enum.map(updated.entries, & &1.kind) == [:user, :assistant, :tool_result, :assistant]
+      refute_receive {:store_append, "session-1", _}, 50
+    end
+
     test "세션 없이 메시지로 시작하면 에러를 반환한다" do
       {:ok, agent} = Agent.spawn(config())
 
