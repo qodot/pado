@@ -16,10 +16,12 @@ cd pado && mix pado.llm.login --output ~/.config/pado/openai_codex.json
 ## Configure Agent
 
 ````elixir
+alias Pado.Agent.Session
+alias Pado.Agent.Session.{JSONL, Store}
 alias Pado.AgentConfig.LLM
 alias Pado.LLM.Catalog.OpenAICodex
 alias Pado.LLM.Credential.FileLoader
-alias Pado.LLM.Message.User
+alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
 # 1. 크레덴셜 로드
 creds_path = Path.expand("~/.config/pado/openai_codex.json")
@@ -36,9 +38,9 @@ creds =
       raise "Failed to load credentials: #{inspect(reason)}"
   end
 
-# 2. 에이전트와 세션
+# 2. 에이전트와 세션 저장소
 agent = %Pado.AgentConfig{
-  llm: %Pado.AgentConfig.LLM{
+  llm: %LLM{
     provider: :openai_codex,
     credentials: creds,
     model: OpenAICodex.default()
@@ -46,15 +48,135 @@ agent = %Pado.AgentConfig{
   harness: %Pado.AgentConfig.Harness{tools: [Pado.AgentConfig.Tools.Bash.tool(timeout: 10)]}
 }
 
-session_id = "session-#{System.unique_integer([:positive])}"
+sessions_dir = Path.expand("~/.config/pado/sessions")
+store = {JSONL, directory: sessions_dir}
+:ok = File.mkdir_p(sessions_dir)
 
-# 3. 누적되는 메시지 상태 (Elixir Agent로 보관)
-{:ok, state_pid} = Elixir.Agent.start_link(fn -> [] end)
-{:ok, running_agent_pid} = Elixir.Agent.start_link(fn -> nil end)
+{:ok, summaries} = Store.list(store)
 
-# 4. UI 위젯
+new_session_label = "새 세션"
+
+session_options =
+  [
+    {:new, new_session_label}
+    | Enum.map(summaries, fn summary ->
+        label =
+          summary.id <>
+            " · " <>
+            Calendar.strftime(summary.updated_at, "%Y-%m-%d %H:%M:%S")
+
+        {summary.id, label}
+      end)
+  ]
+
+session_input = Kino.Input.select("세션", session_options, default: :new)
+session_title_input = Kino.Input.text("새 세션 ID", default: "")
+
+session_form =
+  Kino.Control.form(
+    [session: session_input, new_id: session_title_input],
+    submit: "세션 열기"
+  )
+
+session_frame = Kino.Frame.new()
 chat_frame = Kino.Frame.new()
 
+{:ok, session_pid} = Elixir.Agent.start_link(fn -> nil end)
+{:ok, running_agent_pid} = Elixir.Agent.start_link(fn -> nil end)
+
+open_session = fn selected, new_id ->
+  case selected do
+    :new ->
+      now = DateTime.utc_now()
+
+      id =
+        new_id
+        |> String.trim()
+        |> case do
+          "" -> "session-#{System.unique_integer([:positive])}"
+          id -> id
+        end
+
+      session = %Session{id: id, created_at: now, updated_at: now}
+
+      case Store.save(store, session) do
+        :ok -> {:ok, session}
+        {:error, reason} -> {:error, reason}
+      end
+
+    id when is_binary(id) ->
+      Store.load(store, id)
+  end
+end
+
+message_text = fn
+  %User{content: content} when is_binary(content) ->
+    content
+
+  %User{content: parts} ->
+    parts
+    |> Enum.flat_map(fn
+      {:text, text} -> [text]
+      other -> [inspect(other)]
+    end)
+    |> Enum.join("\n")
+
+  %Assistant{content: parts} ->
+    parts
+    |> Enum.flat_map(fn
+      {:text, text} -> [text]
+      {:thinking, text} -> ["> " <> String.replace(text, "\n", "\n> ")]
+      {:tool_call, call} -> ["```elixir\n" <> inspect(call, pretty: true) <> "\n```"]
+      other -> [inspect(other)]
+    end)
+    |> Enum.join("\n\n")
+
+  %ToolResult{content: parts} ->
+    parts
+    |> Enum.map(fn
+      {:text, text} -> text
+      other -> inspect(other)
+    end)
+    |> Enum.join("\n")
+end
+
+render_session = fn session ->
+  Kino.Frame.clear(chat_frame)
+  Kino.Frame.render(session_frame, Kino.Markdown.new("**세션** `" <> session.id <> "`"))
+
+  session
+  |> Session.to_llm_messages()
+  |> Enum.each(fn
+    %User{} = message ->
+      Kino.Frame.append(chat_frame, Kino.Markdown.new("**나**\n\n" <> message_text.(message)))
+
+    %Assistant{} = message ->
+      text = message_text.(message)
+
+      if text != "" do
+        Kino.Frame.append(chat_frame, Kino.Markdown.new("**봇**\n\n" <> text))
+      end
+
+    %ToolResult{tool_name: name} = message ->
+      Kino.Frame.append(
+        chat_frame,
+        Kino.Markdown.new("**" <> name <> " 결과**\n\n```\n" <> message_text.(message) <> "\n```")
+      )
+  end)
+end
+
+Kino.listen(session_form, fn %{data: %{session: selected, new_id: new_id}} ->
+  case open_session.(selected, new_id) do
+    {:ok, session} ->
+      Elixir.Agent.update(session_pid, fn _ -> session end)
+      render_session.(session)
+
+    {:error, reason} ->
+      Kino.Frame.render(session_frame, Kino.Markdown.new("**세션 오류**\n\n`" <> inspect(reason) <> "`"))
+  end
+end)
+
+# 3. 대화 UI
 model_options =
   Pado.LLM.Catalog.OpenAICodex.all()
   |> Enum.map(fn m -> {m.id, m.name} end)
@@ -99,7 +221,41 @@ wait_until_subscriber_count = fn pid, count ->
   end)
 end
 
-# 5. 입력 처리
+tool_result_text = fn %ToolResult{content: parts} ->
+  parts
+  |> Enum.map(fn
+    {:text, t} -> t
+    other -> inspect(other)
+  end)
+  |> Enum.join("\n")
+end
+
+render_reply = fn frame, thinking, text ->
+  thinking_block =
+    if thinking == "" do
+      ""
+    else
+      "> " <> String.replace(thinking, "\n", "\n> ") <> "\n\n"
+    end
+
+  Kino.Frame.render(
+    frame,
+    Kino.Markdown.new("**봇**\n\n" <> thinking_block <> text)
+  )
+end
+
+ensure_frame = fn frame ->
+  case frame do
+    nil ->
+      f = Kino.Frame.new()
+      Kino.Frame.append(chat_frame, f)
+      f
+
+    f ->
+      f
+  end
+end
+
 Kino.listen(abort_button, fn _event ->
   case Elixir.Agent.get(running_agent_pid, & &1) do
     pid when is_pid(pid) -> GenServer.cast(pid, :abort_job)
@@ -109,124 +265,85 @@ end)
 
 Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} ->
   text = String.trim(text)
+  session = Elixir.Agent.get(session_pid, & &1)
 
-  if text != "" do
-    model = Pado.LLM.Catalog.OpenAICodex.get(model_id)
-    opts = Keyword.put(agent.llm.opts, :reasoning_effort, effort)
-    current_agent = %{agent | llm: %{agent.llm | model: model, opts: opts}}
+  cond do
+    session == nil ->
+      Kino.Frame.render(session_frame, Kino.Markdown.new("**세션을 먼저 열어 주세요.**"))
 
-    msgs0 = Elixir.Agent.get(state_pid, & &1) ++ [User.new(text)]
-    Kino.Frame.append(chat_frame, Kino.Markdown.new("**🙂 나**\n\n" <> text))
+    text == "" ->
+      :ok
 
-    job = %Pado.Agent.Job{
-      messages: msgs0,
-      session_id: session_id,
-      job_id: "job-#{System.unique_integer([:positive])}"
-    }
+    true ->
+      model = Pado.LLM.Catalog.OpenAICodex.get(model_id)
+      opts = Keyword.put(agent.llm.opts, :reasoning_effort, effort)
+      current_agent = %{agent | llm: %{agent.llm | model: model, opts: opts}}
 
-    tool_result_text = fn %Pado.LLM.Message.ToolResult{content: parts} ->
-      parts
-      |> Enum.map(fn
-        {:text, t} -> t
-        other -> inspect(other)
-      end)
-      |> Enum.join("\n")
-    end
+      Kino.Frame.append(chat_frame, Kino.Markdown.new("**나**\n\n" <> text))
 
-    render_reply = fn frame, thinking, text ->
-      thinking_block =
-        if thinking == "" do
-          ""
-        else
-          "> 💭 " <> String.replace(thinking, "\n", "\n> ") <> "\n\n"
-        end
+      {:ok, agent_pid} = Pado.Agent.spawn(current_agent, session: session, store: store)
 
-      Kino.Frame.render(
-        frame,
-        Kino.Markdown.new("**🤖 봇**\n\n" <> thinking_block <> text)
-      )
-    end
+      collector =
+        Task.async(fn ->
+          agent_pid
+          |> Pado.Stream.subscribe()
+          |> Enum.reduce({nil, "", ""}, fn
+            {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
+            {frame, tbuf, buf} ->
+              frame = ensure_frame.(frame)
+              new_tbuf = tbuf <> d
+              render_reply.(frame, new_tbuf, buf)
+              {frame, new_tbuf, buf}
 
-    ensure_frame = fn frame ->
-      case frame do
-        nil ->
-          f = Kino.Frame.new()
-          Kino.Frame.append(chat_frame, f)
-          f
+            {:message_update, %{llm_event: {:text_delta, %{delta: d}}}},
+            {frame, tbuf, buf} ->
+              frame = ensure_frame.(frame)
+              new_buf = buf <> d
+              render_reply.(frame, tbuf, new_buf)
+              {frame, tbuf, new_buf}
 
-        f ->
-          f
-      end
-    end
+            {:tool_execution_start, %{tool_name: name, args: args}}, _acc ->
+              block =
+                "**" <> name <> "**\n\n" <>
+                  "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
 
-    {:ok, agent_pid} = Pado.Agent.spawn(current_agent)
+              Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+              {nil, "", ""}
 
-    collector =
-      Task.async(fn ->
-        agent_pid
-        |> Pado.Stream.subscribe()
-        |> Enum.reduce({nil, "", "", msgs0}, fn
-          {:message_update, %{llm_event: {:thinking_delta, %{delta: d}}}},
-          {frame, tbuf, buf, ms} ->
-            frame = ensure_frame.(frame)
-            new_tbuf = tbuf <> d
-            render_reply.(frame, new_tbuf, buf)
-            {frame, new_tbuf, buf, ms}
+            {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}}, _acc ->
+              label = if is_error, do: name <> " 오류", else: name <> " 결과"
+              output = tool_result_text.(result)
 
-          {:message_update, %{llm_event: {:text_delta, %{delta: d}}}},
-          {frame, tbuf, buf, ms} ->
-            frame = ensure_frame.(frame)
-            new_buf = buf <> d
-            render_reply.(frame, tbuf, new_buf)
-            {frame, tbuf, new_buf, ms}
+              block =
+                "**" <> label <> "**\n\n" <>
+                  "```\n" <> output <> "\n```"
 
-          {:tool_execution_start, %{tool_name: name, args: args}}, {_frame, _tbuf, _buf, ms} ->
-            block =
-              "**🔧 " <> name <> "**\n\n" <>
-                "```elixir\n" <> inspect(args, pretty: true) <> "\n```"
+              Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
+              {nil, "", ""}
 
-            Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-            {nil, "", "", ms}
+            {:job_end, %{status: :aborted}}, acc ->
+              Kino.Frame.append(chat_frame, Kino.Markdown.new("**Aborted**"))
+              acc
 
-          {:tool_execution_end, %{tool_name: name, result: result, is_error: is_error}},
-          {_frame, _tbuf, _buf, ms} ->
-            emoji = if is_error, do: "⚠️", else: "📤"
-            output = tool_result_text.(result)
+            {:job_end, %{session: updated_session}}, acc ->
+              Elixir.Agent.update(session_pid, fn _ -> updated_session end)
+              acc
 
-            block =
-              "**" <> emoji <> " " <> name <> " 결과**\n\n" <>
-                "```\n" <> output <> "\n```"
-
-            Kino.Frame.append(chat_frame, Kino.Markdown.new(block))
-            {nil, "", "", ms}
-
-          {:job_end, %{status: :aborted, turns: turns}}, {frame, tbuf, buf, ms} ->
-            Kino.Frame.append(chat_frame, Kino.Markdown.new("**⛔ Aborted**"))
-            new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
-            {frame, tbuf, buf, new_ms}
-
-          {:job_end, %{turns: turns}}, {frame, tbuf, buf, ms} ->
-            new_ms = ms ++ Enum.flat_map(turns, &Pado.Agent.Turn.as_llm_messages/1)
-            {frame, tbuf, buf, new_ms}
-
-          _other, acc ->
-            acc
+            _other, acc ->
+              acc
+          end)
         end)
+
+      :ok = wait_until_subscriber_count.(agent_pid, 1)
+      :ok = Pado.Agent.start(agent_pid, text, job_id: "job-#{System.unique_integer([:positive])}")
+      Elixir.Agent.update(running_agent_pid, fn _ -> agent_pid end)
+
+      Task.await(collector, :infinity)
+
+      Elixir.Agent.update(running_agent_pid, fn
+        pid when pid == agent_pid -> nil
+        pid -> pid
       end)
-
-    :ok = wait_until_subscriber_count.(agent_pid, 1)
-    callers = [self() | Process.get(:"$callers", [])]
-    :ok = GenServer.call(agent_pid, {:start_job, self(), job, callers})
-    Elixir.Agent.update(running_agent_pid, fn _ -> agent_pid end)
-
-    {_frame, _tbuf, _buf, final_msgs} = Task.await(collector, :infinity)
-
-    Elixir.Agent.update(state_pid, fn _ -> final_msgs end)
-
-    Elixir.Agent.update(running_agent_pid, fn
-      pid when pid == agent_pid -> nil
-      pid -> pid
-    end)
   end
 end)
 
@@ -236,5 +353,5 @@ end)
 ## Load UI
 
 ```elixir
-Kino.Layout.grid([chat_frame, form, abort_button], boxed: true)
+Kino.Layout.grid([session_frame, session_form, chat_frame, form, abort_button], boxed: true)
 ```
