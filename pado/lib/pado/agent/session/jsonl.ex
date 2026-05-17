@@ -3,6 +3,33 @@ defmodule Pado.Agent.Session.JSONL do
 
   alias Pado.Agent.Session
   alias Pado.Agent.Session.Entry
+  alias Pado.Agent.Session.Summary
+
+  @impl true
+  def list(opts) when is_list(opts) do
+    directory = Keyword.fetch!(opts, :directory)
+
+    directory
+    |> Path.join("*.jsonl")
+    |> Path.wildcard()
+    |> Enum.reduce_while({:ok, []}, fn path, {:ok, summaries} ->
+      case load_summary(path) do
+        {:ok, summary} -> {:cont, {:ok, [summary | summaries]}}
+        {:error, reason} -> {:halt, {:error, {:invalid_session_file, path, reason}}}
+      end
+    end)
+    |> case do
+      {:ok, summaries} ->
+        summaries =
+          summaries
+          |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
+
+        {:ok, summaries}
+
+      error ->
+        error
+    end
+  end
 
   @impl true
   def load(session_id, opts) when is_binary(session_id) and is_list(opts) do
@@ -78,6 +105,36 @@ defmodule Pado.Agent.Session.JSONL do
     end
   end
 
+  defp load_summary(path) do
+    with {:ok, line} <- read_first_line(path),
+         {:ok, %{"type" => "session"} = map} <- Jason.decode(line),
+         {:ok, created_at} <- decode_datetime(map["created_at"]),
+         {:ok, updated_at} <- decode_datetime(map["updated_at"]) do
+      {:ok,
+       %Summary{
+         id: map["id"],
+         version: map["version"] || 1,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    else
+      {:ok, map} -> {:error, {:invalid_session_header, map}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp read_first_line(path) do
+    path
+    |> File.stream!([], :line)
+    |> Enum.take(1)
+    |> case do
+      [line] -> {:ok, String.trim_trailing(line, "\n")}
+      [] -> {:error, :empty_session_file}
+    end
+  rescue
+    error -> {:error, Exception.message(error)}
+  end
+
   defp decode_entries(lines) do
     lines
     |> Enum.with_index(2)
@@ -98,6 +155,17 @@ defmodule Pado.Agent.Session.JSONL do
       Entry.from_map(map)
     end
   end
+
+  defp decode_datetime(nil), do: {:ok, nil}
+
+  defp decode_datetime(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, reason} -> {:error, {:invalid_datetime, value, reason}}
+    end
+  end
+
+  defp decode_datetime(value), do: {:error, {:invalid_datetime, value}}
 
   defp path(session_id, opts) do
     opts

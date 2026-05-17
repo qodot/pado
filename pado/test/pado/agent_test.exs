@@ -16,6 +16,8 @@ defmodule Pado.AgentTest do
   defmodule Store do
     @behaviour Pado.Agent.Session.Store
 
+    def list(_opts), do: {:ok, []}
+
     def load(_session_id, _opts), do: {:error, :not_found}
 
     def save(session, opts) do

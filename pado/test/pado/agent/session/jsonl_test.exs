@@ -2,11 +2,12 @@ defmodule Pado.Agent.Session.JSONLTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.Session
-  alias Pado.Agent.Session.{CompactionSummary, Entry, Error, JSONL, ModelChange, Store}
+  alias Pado.Agent.Session.{CompactionSummary, Entry, Error, JSONL, ModelChange, Store, Summary}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
 
   @now ~U[2026-05-17 12:00:00Z]
+  @later ~U[2026-05-17 12:01:00Z]
 
   describe "encode/1과 decode/1" do
     test "세션 헤더와 엔트리들을 JSONL로 왕복한다" do
@@ -113,6 +114,49 @@ defmodule Pado.Agent.Session.JSONLTest do
       assert :ok = Store.save(store, session)
       assert :ok = Store.append(store, session.id, full_session.entries)
       assert {:ok, ^full_session} = Store.load(store, session.id)
+    end
+  end
+
+  describe "list/1" do
+    test "디렉터리의 세션 파일 헤더만 읽어 summary 목록을 반환한다" do
+      directory = tmp_path("list")
+      old_session = %{build_session() | id: "old-session", updated_at: @now}
+      new_session = %{build_session() | id: "new-session", updated_at: @later}
+
+      on_exit(fn -> File.rm_rf(directory) end)
+
+      assert :ok = JSONL.save(old_session, directory: directory)
+      assert :ok = JSONL.save(new_session, directory: directory)
+
+      assert {:ok,
+              [
+                %Summary{id: "new-session", updated_at: @later},
+                %Summary{id: "old-session", updated_at: @now}
+              ]} = JSONL.list(directory: directory)
+    end
+
+    test "Store dispatcher로 summary 목록을 조회한다" do
+      directory = tmp_path("store-list")
+      session = build_session()
+      store = {JSONL, directory: directory}
+
+      on_exit(fn -> File.rm_rf(directory) end)
+
+      assert :ok = Store.save(store, session)
+      assert {:ok, [%Summary{id: "session-1"}]} = Store.list(store)
+    end
+
+    test "잘못된 세션 파일이 있으면 파일 경로와 이유를 반환한다" do
+      directory = tmp_path("invalid-list")
+      path = Path.join(directory, "bad.jsonl")
+
+      on_exit(fn -> File.rm_rf(directory) end)
+
+      assert :ok = File.mkdir_p(directory)
+      assert :ok = File.write(path, "{}\n")
+
+      assert {:error, {:invalid_session_file, ^path, {:invalid_session_header, %{}}}} =
+               JSONL.list(directory: directory)
     end
   end
 
