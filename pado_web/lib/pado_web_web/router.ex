@@ -18,6 +18,8 @@ defmodule PadoWebWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/sessions", SessionLive, :index
+    live "/sessions/:id", SessionLive, :show
   end
 
   if Application.compile_env(:pado_web, :dev_routes) do

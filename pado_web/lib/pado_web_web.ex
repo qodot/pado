@@ -62,6 +62,7 @@ defmodule PadoWebWeb do
 
       import Phoenix.HTML
       import PadoWebWeb.CoreComponents
+      import PadoWebWeb.DesignSystem
 
       alias Phoenix.LiveView.JS
       alias PadoWebWeb.Layouts
