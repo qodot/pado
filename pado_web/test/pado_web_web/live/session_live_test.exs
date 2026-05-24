@@ -73,6 +73,10 @@ defmodule PadoWebWeb.SessionLiveTest do
     response = html_response(conn, 200)
     assert response =~ "Hello from user"
     assert response =~ "Hello from assistant"
+    assert response =~ ~s(data-entry-kind="user")
+    assert response =~ ~s(data-entry-kind="assistant")
+    assert response =~ "rounded-lg"
+    refute response =~ "chat-bubble"
   end
 
   test "GET /sessions/:id renders assistant entries before provider modules are loaded", %{

@@ -34,13 +34,19 @@ defmodule PadoWebWeb.DesignSystem do
 
   def session_entry(assigns) do
     ~H"""
-    <div class={chat_class(@entry)}>
-      <div class="chat-header text-xs text-base-content/50">
-        {entry_label(@entry)}
-      </div>
-      <div class={chat_bubble_class(@entry)}>
+    <div :if={@entry.kind == :user} data-entry-kind="user" class="flex justify-end">
+      <div class="max-w-[min(32rem,75%)] rounded-lg bg-base-200 px-3 py-2 text-sm leading-6 text-base-content">
         <p class="whitespace-pre-wrap break-words">{entry_text(@entry)}</p>
       </div>
+    </div>
+
+    <div :if={@entry.kind != :user} data-entry-kind={entry_kind(@entry)} class="max-w-3xl py-2">
+      <div class="mb-1 text-xs text-base-content/45">
+        {entry_label(@entry)}
+      </div>
+      <p class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content">
+        {entry_text(@entry)}
+      </p>
     </div>
     """
   end
@@ -51,14 +57,7 @@ defmodule PadoWebWeb.DesignSystem do
 
   defp format_updated_at(_updated_at), do: "Unknown"
 
-  defp chat_class(%Entry{kind: :user}), do: "chat chat-end"
-  defp chat_class(%Entry{}), do: "chat chat-start"
-
-  defp chat_bubble_class(%Entry{kind: :user}), do: "chat-bubble chat-bubble-primary"
-  defp chat_bubble_class(%Entry{kind: :assistant}), do: "chat-bubble chat-bubble-neutral"
-  defp chat_bubble_class(%Entry{kind: :tool_result}), do: "chat-bubble chat-bubble-secondary"
-  defp chat_bubble_class(%Entry{kind: :error}), do: "chat-bubble chat-bubble-error"
-  defp chat_bubble_class(%Entry{}), do: "chat-bubble"
+  defp entry_kind(%Entry{kind: kind}), do: Atom.to_string(kind)
 
   defp entry_label(%Entry{kind: :user}), do: "User"
   defp entry_label(%Entry{kind: :assistant}), do: "Assistant"
