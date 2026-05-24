@@ -11,6 +11,8 @@ defmodule PadoWebWeb.SessionLive do
       assign(socket,
         page_title: "Sessions",
         selected_id: nil,
+        selected_session: nil,
+        selected_session_error: nil,
         sessions: [],
         sessions_error: nil
       )
@@ -26,6 +28,7 @@ defmodule PadoWebWeb.SessionLive do
       socket
       |> assign(:selected_id, selected_id)
       |> assign_sessions()
+      |> assign_selected_session(selected_id)
 
     {:noreply, socket}
   end
@@ -78,16 +81,36 @@ defmodule PadoWebWeb.SessionLive do
               <h2 class="mt-1 truncate text-xl font-semibold">{@selected_id}</h2>
             </div>
 
-            <div class="flex flex-1 items-center justify-center p-6">
-              <div class="chat chat-start max-w-xl">
-                <div class="chat-bubble chat-bubble-neutral">
-                  Messages will appear here when session playback is connected.
-                </div>
+            <div :if={@selected_session_error} class="p-5">
+              <div class="alert alert-error">
+                <.icon name="hero-exclamation-triangle" class="size-5" />
+                <span>Could not load session.</span>
+              </div>
+            </div>
+
+            <div
+              :if={@selected_session && @selected_session.entries == []}
+              class="flex flex-1 items-center justify-center p-6"
+            >
+              <div class="max-w-sm text-center">
+                <h3 class="text-lg font-semibold">No messages yet</h3>
+                <p class="mt-2 text-sm text-base-content/60">
+                  This session does not have any saved messages.
+                </p>
+              </div>
+            </div>
+
+            <div :if={@selected_session && @selected_session.entries != []} class="flex-1 p-5">
+              <div class="mx-auto flex max-w-3xl flex-col gap-4">
+                <.session_entry :for={entry <- @selected_session.entries} entry={entry} />
               </div>
             </div>
           </div>
 
-          <div :if={!@selected_id} class="flex h-full min-h-96 items-center justify-center p-6">
+          <div
+            :if={!@selected_id}
+            class="flex h-full min-h-96 items-center justify-center p-6"
+          >
             <div class="max-w-sm text-center">
               <div class="loading loading-ring loading-lg text-primary" />
               <h2 class="mt-4 text-xl font-semibold">Select a session</h2>
@@ -100,6 +123,20 @@ defmodule PadoWebWeb.SessionLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  defp assign_selected_session(socket, nil) do
+    assign(socket, selected_session: nil, selected_session_error: nil)
+  end
+
+  defp assign_selected_session(socket, selected_id) do
+    case Store.load(session_store(), selected_id) do
+      {:ok, session} ->
+        assign(socket, selected_session: session, selected_session_error: nil)
+
+      {:error, reason} ->
+        assign(socket, selected_session: nil, selected_session_error: reason)
+    end
   end
 
   defp assign_sessions(socket) do

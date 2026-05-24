@@ -359,6 +359,7 @@ defmodule Pado.Agent.Session.Entry do
   defp decode_stop_reason(reason), do: {:error, {:unknown_stop_reason, reason}}
 
   defp decode_existing_atom(nil), do: {:ok, nil}
+  defp decode_existing_atom("openai_codex"), do: {:ok, :openai_codex}
 
   defp decode_existing_atom(value) when is_binary(value) do
     {:ok, String.to_existing_atom(value)}
