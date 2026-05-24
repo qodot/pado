@@ -11,7 +11,7 @@ defmodule PadoWebWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
+    <header class="navbar bg-base-100 px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
         <.link navigate={~p"/sessions"} class="btn btn-ghost px-2 text-lg font-semibold">
           Pado Web
@@ -31,8 +31,8 @@ defmodule PadoWebWeb.Layouts do
       </div>
     </header>
 
-    <main class="px-4 py-6 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-7xl space-y-4">
+    <main class="h-[calc(100vh-4rem)] overflow-hidden">
+      <div class="h-full">
         {render_slot(@inner_block)}
       </div>
     </main>

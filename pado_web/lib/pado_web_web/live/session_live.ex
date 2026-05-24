@@ -37,9 +37,9 @@ defmodule PadoWebWeb.SessionLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="grid min-h-[calc(100vh-12rem)] grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside class="rounded-box border border-base-300 bg-base-100">
-          <div class="flex items-center justify-between border-b border-base-300 px-4 py-3">
+      <div class="grid h-full grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside class="min-h-52 overflow-y-auto bg-base-200/80">
+          <div class="flex items-center justify-between px-5 py-5">
             <div>
               <p class="text-xs font-medium uppercase text-base-content/60">Workspace</p>
               <h1 class="text-lg font-semibold">Sessions</h1>
@@ -54,8 +54,8 @@ defmodule PadoWebWeb.SessionLive do
             </div>
           </div>
 
-          <nav :if={@sessions != []} class="p-2">
-            <ul class="menu w-full gap-1">
+          <nav :if={@sessions != []} class="px-3 pb-5">
+            <ul class="menu w-full gap-1 p-0">
               <.session_nav_item
                 :for={session <- @sessions}
                 id={session.id}
@@ -71,9 +71,9 @@ defmodule PadoWebWeb.SessionLive do
           </div>
         </aside>
 
-        <section class="rounded-box border border-base-300 bg-base-100">
+        <section class="min-h-0 bg-base-100">
           <div :if={@selected_id} class="flex h-full flex-col">
-            <div class="border-b border-base-300 px-5 py-4">
+            <div class="px-6 py-5">
               <div class="flex items-center gap-2">
                 <span class="status status-success" />
                 <p class="text-sm font-medium text-base-content/60">Active session</p>
@@ -100,7 +100,10 @@ defmodule PadoWebWeb.SessionLive do
               </div>
             </div>
 
-            <div :if={@selected_session && @selected_session.entries != []} class="flex-1 p-5">
+            <div
+              :if={@selected_session && @selected_session.entries != []}
+              class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-2"
+            >
               <div class="mx-auto flex max-w-3xl flex-col gap-4">
                 <.session_entry :for={entry <- @selected_session.entries} entry={entry} />
               </div>

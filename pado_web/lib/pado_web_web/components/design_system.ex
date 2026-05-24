@@ -17,8 +17,8 @@ defmodule PadoWebWeb.DesignSystem do
       <.link
         navigate={@navigate}
         class={[
-          "rounded-box border border-transparent",
-          @active && "active border-primary/30"
+          "px-2",
+          @active && "font-semibold text-primary"
         ]}
       >
         <div class="flex min-w-0 flex-1 flex-col gap-1">
