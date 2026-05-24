@@ -41,12 +41,10 @@ defmodule PadoWebWeb.DesignSystem do
     </div>
 
     <div :if={@entry.kind != :user} data-entry-kind={entry_kind(@entry)} class="max-w-3xl py-2">
-      <div class="mb-1 text-xs text-base-content/45">
+      <div :if={entry_label(@entry)} class="mb-1 text-xs text-base-content/45">
         {entry_label(@entry)}
       </div>
-      <p class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content">
-        {entry_text(@entry)}
-      </p>
+      <p class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content" phx-no-format>{entry_text(@entry)}</p>
     </div>
     """
   end
@@ -60,7 +58,7 @@ defmodule PadoWebWeb.DesignSystem do
   defp entry_kind(%Entry{kind: kind}), do: Atom.to_string(kind)
 
   defp entry_label(%Entry{kind: :user}), do: "User"
-  defp entry_label(%Entry{kind: :assistant}), do: "Assistant"
+  defp entry_label(%Entry{kind: :assistant}), do: nil
   defp entry_label(%Entry{kind: :tool_result, payload: %ToolResult{tool_name: name}}), do: name
   defp entry_label(%Entry{kind: :compaction_summary}), do: "Summary"
   defp entry_label(%Entry{kind: :model_change}), do: "Model"
