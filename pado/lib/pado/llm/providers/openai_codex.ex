@@ -79,7 +79,7 @@ defmodule Pado.LLM.Providers.OpenAICodex do
   end
 
   defp do_start_request(request, timeout, max_retries, retry_delay_ms, attempt) do
-    ref = Finch.async_request(request, @finch_pool)
+    ref = Finch.async_request(request, @finch_pool, receive_timeout: timeout)
 
     receive do
       {^ref, {:status, 200}} ->
