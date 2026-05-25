@@ -48,7 +48,10 @@ defmodule PadoWebWeb.DesignSystem do
       </div>
       <div class="space-y-3">
         <div :for={part <- entry_content_parts(@entry)} data-content-kind={part.kind}>
-          <div :if={part.kind == :error} class="alert alert-error items-start py-3 text-sm">
+          <div
+            :if={part.kind == :error}
+            class="alert alert-error items-start border-0 py-3 text-sm shadow-none"
+          >
             <.icon name="hero-exclamation-triangle" class="mt-0.5 size-4 shrink-0" />
             <div class="min-w-0">
               <div class="font-medium">{part.title}</div>
