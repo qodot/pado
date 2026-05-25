@@ -75,6 +75,9 @@ defmodule Pado.Agent.Session do
       "type" => "session",
       "version" => session.version,
       "id" => session.id,
+      "provider" => encode_atom(session.provider),
+      "model" => session.model,
+      "reasoning_effort" => encode_atom(session.reasoning_effort),
       "created_at" => encode_datetime(session.created_at),
       "updated_at" => encode_datetime(session.updated_at),
       "entries" => Enum.map(session.entries, &Entry.to_map/1)
@@ -83,13 +86,18 @@ defmodule Pado.Agent.Session do
 
   @spec from_map(map()) :: {:ok, t()} | {:error, term()}
   def from_map(%{"type" => "session"} = map) do
-    with {:ok, created_at} <- decode_datetime(map["created_at"]),
+    with {:ok, provider} <- decode_existing_atom(map["provider"]),
+         {:ok, reasoning_effort} <- decode_existing_atom(map["reasoning_effort"]),
+         {:ok, created_at} <- decode_datetime(map["created_at"]),
          {:ok, updated_at} <- decode_datetime(map["updated_at"]),
          {:ok, entries} <- decode_entries(Map.get(map, "entries", [])) do
       {:ok,
        %__MODULE__{
          id: map["id"],
          version: map["version"] || 1,
+         provider: provider,
+         model: map["model"],
+         reasoning_effort: reasoning_effort,
          entries: entries,
          created_at: created_at,
          updated_at: updated_at
@@ -126,6 +134,19 @@ defmodule Pado.Agent.Session do
 
   defp encode_datetime(nil), do: nil
   defp encode_datetime(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+
+  defp encode_atom(nil), do: nil
+  defp encode_atom(value) when is_atom(value), do: Atom.to_string(value)
+
+  defp decode_existing_atom(nil), do: {:ok, nil}
+
+  defp decode_existing_atom(value) when is_binary(value) do
+    {:ok, String.to_existing_atom(value)}
+  rescue
+    ArgumentError -> {:error, {:unknown_atom, value}}
+  end
+
+  defp decode_existing_atom(value), do: {:error, {:invalid_atom, value}}
 
   defp decode_datetime(nil), do: {:ok, nil}
 

@@ -28,6 +28,31 @@ defmodule Pado.Agent.Session.JSONLTest do
       assert Enum.all?(entries, &match?(%{"type" => "entry"}, &1))
     end
 
+    test "세션 헤더에 현재 모델 설정을 저장한다" do
+      [header | _entries] =
+        build_session()
+        |> JSONL.encode()
+        |> String.split("\n", trim: true)
+        |> Enum.map(&Jason.decode!/1)
+
+      assert header["provider"] == "openai_codex"
+      assert header["model"] == "gpt-5.4"
+      assert header["reasoning_effort"] == "high"
+    end
+
+    test "이전 세션 헤더는 현재 모델 설정 없이도 읽는다" do
+      header =
+        Session.new("session-1", timestamp: @now)
+        |> Session.to_map()
+        |> Map.delete("entries")
+        |> Map.drop(["provider", "model", "reasoning_effort"])
+
+      data = Jason.encode!(header) <> "\n"
+
+      assert {:ok, %Session{provider: nil, model: nil, reasoning_effort: nil}} =
+               JSONL.decode(data)
+    end
+
     test "JSON로 표현할 수 없는 error reason은 inspect 문자열로 저장한다" do
       session = %{
         build_session()
@@ -164,6 +189,9 @@ defmodule Pado.Agent.Session.JSONLTest do
     %Session{
       id: "session-1",
       version: 1,
+      provider: :openai_codex,
+      model: "gpt-5.4",
+      reasoning_effort: :high,
       created_at: @now,
       updated_at: @now,
       entries: [
