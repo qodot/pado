@@ -105,6 +105,8 @@ defmodule PadoWebWeb.SessionLive do
 
             <div
               :if={@selected_session && @selected_session.entries != []}
+              id="session-entry-list"
+              phx-hook="SessionScroll"
               class="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2"
             >
               <div class="mx-auto flex max-w-3xl flex-col gap-4">

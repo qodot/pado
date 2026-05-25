@@ -80,6 +80,8 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ "Hello from assistant"
     assert response =~ ~s(data-entry-kind="user")
     assert response =~ ~s(data-entry-kind="assistant")
+    assert response =~ ~s(id="session-entry-list")
+    assert response =~ ~s(phx-hook="SessionScroll")
     assert response =~ "rounded-lg"
     refute response =~ "chat-bubble"
     refute response =~ "Assistant"

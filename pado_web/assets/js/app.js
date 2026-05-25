@@ -5,10 +5,26 @@ import {hooks as colocatedHooks} from "phoenix-colocated/pado_web"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+const hooks = {
+  SessionScroll: {
+    mounted() {
+      this.scrollToBottom()
+    },
+    updated() {
+      this.scrollToBottom()
+    },
+    scrollToBottom() {
+      requestAnimationFrame(() => {
+        this.el.scrollTop = this.el.scrollHeight
+      })
+    },
+  },
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...hooks},
 })
 
 // LiveView 이동과 폼 제출 중 진행 상태를 표시한다.
