@@ -6,6 +6,7 @@ defmodule PadoWebWeb.SessionLive do
   alias Pado.Agent.Session.Store
   alias Pado.AgentConfig
   alias Pado.AgentConfig.{Harness, LLM}
+  alias Pado.AgentConfig.Tools.Bash
   alias Pado.LLM.Credential
   alias Pado.LLM.Catalog.OpenAICodex
   alias Pado.LLM.Message.User
@@ -309,7 +310,7 @@ defmodule PadoWebWeb.SessionLive do
            router: llm_router(),
            opts: llm_opts(session.reasoning_effort)
          },
-         harness: %Harness{}
+         harness: %Harness{tools: [Bash.tool()]}
        }}
     end
   end

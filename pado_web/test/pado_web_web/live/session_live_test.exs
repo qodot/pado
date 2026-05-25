@@ -422,7 +422,11 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert_push_event view, "clear-chat-composer", %{id: "chat-composer-session-a"}
 
     assert_receive {:fake_router_called,
-                    %{session_id: "session-a", opts: [reasoning_effort: "medium"]}}
+                    %{
+                      ctx: %{tools: [%{name: "bash"}]},
+                      session_id: "session-a",
+                      opts: [reasoning_effort: "medium"]
+                    }}
 
     assert eventually(fn ->
              render(view) =~ "Hello from agent"
