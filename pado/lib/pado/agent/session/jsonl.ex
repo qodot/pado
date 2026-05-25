@@ -3,7 +3,6 @@ defmodule Pado.Agent.Session.JSONL do
 
   alias Pado.Agent.Session
   alias Pado.Agent.Session.Codec
-  alias Pado.Agent.Session.Entry
   alias Pado.Agent.Session.Summary
 
   @impl true
@@ -78,7 +77,7 @@ defmodule Pado.Agent.Session.JSONL do
   def encode(%Session{} = session) do
     header = session |> Codec.session_to_map() |> Map.delete("entries")
 
-    [header | Enum.map(session.entries, &Entry.to_map/1)]
+    [header | Enum.map(session.entries, &Codec.entry_to_map/1)]
     |> Enum.map(&Jason.encode!/1)
     |> Enum.join("\n")
     |> Kernel.<>("\n")
@@ -86,7 +85,7 @@ defmodule Pado.Agent.Session.JSONL do
 
   defp encode_entries(entries) do
     entries
-    |> Enum.map(&Entry.to_map/1)
+    |> Enum.map(&Codec.entry_to_map/1)
     |> Enum.map(&Jason.encode!/1)
     |> Enum.join("\n")
     |> Kernel.<>("\n")
@@ -153,7 +152,7 @@ defmodule Pado.Agent.Session.JSONL do
 
   defp decode_entry(line) do
     with {:ok, map} <- Jason.decode(line) do
-      Entry.from_map(map)
+      Codec.entry_from_map(map)
     end
   end
 
