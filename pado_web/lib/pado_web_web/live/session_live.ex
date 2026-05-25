@@ -84,6 +84,7 @@ defmodule PadoWebWeb.SessionLive do
                 :for={session <- @sessions}
                 id={session.id}
                 navigate={~p"/sessions/#{session.id}"}
+                cwd={session.cwd}
                 updated_at={session.updated_at}
                 active={session.id == @selected_id}
               />

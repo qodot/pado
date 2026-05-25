@@ -10,6 +10,7 @@ defmodule PadoWebWeb.DesignSystem do
 
   attr :id, :string, required: true
   attr :navigate, :string, required: true
+  attr :cwd, :string, default: nil
   attr :updated_at, :any, default: nil
   attr :active, :boolean, default: false
 
@@ -25,6 +26,7 @@ defmodule PadoWebWeb.DesignSystem do
       >
         <div class="flex min-w-0 flex-1 flex-col gap-1">
           <span class="truncate font-medium">{@id}</span>
+          <span :if={present?(@cwd)} class="truncate text-xs opacity-50" title={@cwd}>{@cwd}</span>
           <span class="text-xs opacity-60">{format_updated_at(@updated_at)}</span>
         </div>
       </.link>
@@ -232,6 +234,8 @@ defmodule PadoWebWeb.DesignSystem do
   end
 
   defp format_updated_at(_updated_at), do: "Unknown"
+
+  defp present?(value), do: is_binary(value) and value != ""
 
   defp entry_kind(%Entry{kind: kind}), do: Atom.to_string(kind)
 

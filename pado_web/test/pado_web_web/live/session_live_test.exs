@@ -188,7 +188,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   end
 
   test "GET /sessions lists stored sessions", %{conn: conn, store: store} do
-    :ok = Store.save(store, Session.new("session-a"))
+    :ok = Store.save(store, Session.new("session-a", cwd: "/tmp/pado-project"))
     :ok = Store.save(store, Session.new("session-b"))
 
     conn = get(conn, ~p"/sessions")
@@ -196,6 +196,7 @@ defmodule PadoWebWeb.SessionLiveTest do
     response = html_response(conn, 200)
     assert response =~ "session-a"
     assert response =~ "session-b"
+    assert response =~ "/tmp/pado-project"
     assert response =~ ~s(href="/sessions/session-a")
   end
 
