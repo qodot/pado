@@ -1,7 +1,10 @@
 defmodule Pado.Agent.Session do
   alias Pado.Agent.Session.Entry
+  alias Pado.LLM.Catalog.OpenAICodex
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
+
+  @default_reasoning_effort :medium
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -29,12 +32,13 @@ defmodule Pado.Agent.Session do
   @spec new(String.t(), keyword()) :: t()
   def new(id, opts \\ []) when is_binary(id) and is_list(opts) do
     timestamp = Keyword.get(opts, :timestamp, DateTime.utc_now())
+    default_model = default_model()
 
     %__MODULE__{
       id: id,
-      provider: Keyword.get(opts, :provider),
-      model: Keyword.get(opts, :model),
-      reasoning_effort: Keyword.get(opts, :reasoning_effort),
+      provider: Keyword.get(opts, :provider, default_model.provider),
+      model: Keyword.get(opts, :model, default_model.id),
+      reasoning_effort: Keyword.get(opts, :reasoning_effort, @default_reasoning_effort),
       created_at: timestamp,
       updated_at: timestamp
     }
@@ -77,4 +81,6 @@ defmodule Pado.Agent.Session do
     |> Map.fetch!(:seq)
     |> Kernel.+(1)
   end
+
+  defp default_model, do: OpenAICodex.default()
 end
