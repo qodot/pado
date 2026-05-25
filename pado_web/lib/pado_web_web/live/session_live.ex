@@ -134,6 +134,7 @@ defmodule PadoWebWeb.SessionLive do
                 <.session_entry :for={entry <- @selected_session.entries} entry={entry} />
                 <.session_streaming_entry
                   :if={@streaming_response}
+                  id={streaming_entry_id(@selected_id)}
                   text={@streaming_response.text}
                   thinking={@streaming_response.thinking}
                 />
@@ -475,6 +476,7 @@ defmodule PadoWebWeb.SessionLive do
   end
 
   defp chat_composer_id(session_id), do: "chat-composer-#{session_id}"
+  defp streaming_entry_id(session_id), do: "session-streaming-entry-#{session_id}"
 
   defp model_options do
     OpenAICodex.all()

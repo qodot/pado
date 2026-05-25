@@ -46,25 +46,43 @@ defmodule PadoWebWeb.DesignSystem do
       <div :if={entry_label(@entry)} class="mb-1 text-xs text-base-content/45">
         {entry_label(@entry)}
       </div>
-      <p class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content" phx-no-format>{entry_text(@entry)}</p>
+      <div class="space-y-3">
+        <p
+          :for={part <- entry_content_parts(@entry)}
+          data-content-kind={part.kind}
+          class={[
+            "whitespace-pre-wrap break-words text-sm leading-7",
+            part.kind == :thinking && "text-base-content/50",
+            part.kind == :text && "text-base-content"
+          ]}
+          phx-no-format
+        >{part.text}</p>
+      </div>
     </div>
     """
   end
 
+  attr :id, :string, required: true
   attr :text, :string, default: ""
   attr :thinking, :string, default: ""
 
   def session_streaming_entry(assigns) do
     ~H"""
-    <div data-entry-kind="assistant" data-streaming-entry class="max-w-3xl py-2">
+    <div id={@id} data-entry-kind="assistant" data-streaming-entry class="max-w-3xl py-2">
       <p
-        :if={@thinking != ""}
-        class="mb-3 whitespace-pre-wrap break-words text-sm leading-7 text-base-content/50"
+        id={"#{@id}-thinking"}
+        class={[
+          "mb-3 whitespace-pre-wrap break-words text-sm leading-7 text-base-content/50",
+          @thinking == "" && "hidden"
+        ]}
         phx-no-format
       >{@thinking}</p>
       <p
-        :if={@text != ""}
-        class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content"
+        id={"#{@id}-text"}
+        class={[
+          "whitespace-pre-wrap break-words text-sm leading-7 text-base-content",
+          @text == "" && "hidden"
+        ]}
         phx-no-format
       >{@text}</p>
       <div
@@ -227,6 +245,31 @@ defmodule PadoWebWeb.DesignSystem do
   end
 
   defp entry_text(%Entry{payload: %Error{} = error}), do: error.message
+
+  defp entry_content_parts(%Entry{payload: %Assistant{content: parts}}) do
+    content_parts(parts)
+  end
+
+  defp entry_content_parts(%Entry{payload: %ToolResult{content: parts}}) do
+    content_parts(parts)
+  end
+
+  defp entry_content_parts(%Entry{} = entry) do
+    [%{kind: :text, text: entry_text(entry)}]
+  end
+
+  defp content_parts(parts) when is_list(parts) do
+    parts
+    |> Enum.flat_map(fn
+      {:thinking, text} when is_binary(text) and text != "" -> [%{kind: :thinking, text: text}]
+      {:text, text} when is_binary(text) and text != "" -> [%{kind: :text, text: text}]
+      _part -> []
+    end)
+    |> case do
+      [] -> [%{kind: :text, text: "No text content."}]
+      parts -> parts
+    end
+  end
 
   defp message_text(message) do
     case Message.text(message) do

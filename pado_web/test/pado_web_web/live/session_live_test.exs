@@ -56,6 +56,47 @@ defmodule PadoWebWeb.SessionLiveTest do
       )
     end
 
+    defp fake_stream(owner, :thinking_then_text, model) do
+      Stream.resource(
+        fn -> :thinking end,
+        fn
+          :thinking ->
+            send(owner, {:fake_router_stream_stage, :thinking, self()})
+
+            {[
+               {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+               {:thinking_delta, %{index: 0, delta: "Thinking through it"}}
+             ], :text}
+
+          :text ->
+            receive do
+              :release_text_delta ->
+                send(owner, {:fake_router_stream_stage, :text, self()})
+                {[{:text_delta, %{index: 0, delta: "Hello visible text"}}], :done}
+            end
+
+          :done ->
+            receive do
+              :release_done ->
+                {[
+                   {:done,
+                    %{
+                      message: %Assistant{
+                        content: [{:text, "Hello visible text"}],
+                        provider: model.provider,
+                        model: model.id
+                      }
+                    }}
+                 ], :halt}
+            end
+
+          :halt ->
+            {:halt, :halt}
+        end,
+        fn _state -> :ok end
+      )
+    end
+
     defp fake_stream(_owner, _mode, model) do
       [
         {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
@@ -202,7 +243,12 @@ defmodule PadoWebWeb.SessionLiveTest do
       |> Session.new()
       |> append_messages([
         User.new("Hello from user"),
-        %Assistant{content: [{:text, "Hello from assistant"}]}
+        %Assistant{
+          content: [
+            {:thinking, "Stored thinking"},
+            {:text, "Hello from assistant"}
+          ]
+        }
       ])
 
     :ok = Store.save(store, session)
@@ -211,9 +257,12 @@ defmodule PadoWebWeb.SessionLiveTest do
 
     response = html_response(conn, 200)
     assert response =~ "Hello from user"
+    assert response =~ "Stored thinking"
     assert response =~ "Hello from assistant"
     assert response =~ ~s(data-entry-kind="user")
     assert response =~ ~s(data-entry-kind="assistant")
+    assert response =~ ~s(data-content-kind="thinking")
+    assert response =~ ~s(data-content-kind="text")
     assert response =~ ~s(id="session-entry-list")
     assert response =~ ~s(phx-hook="SessionScroll")
     assert response =~ "rounded-lg"
@@ -331,6 +380,45 @@ defmodule PadoWebWeb.SessionLiveTest do
 
     assert eventually(fn ->
              render(view) =~ "Hello from stream"
+           end)
+  end
+
+  test "streaming thinking remains visible after text starts", %{
+    conn: conn,
+    store: store
+  } do
+    Application.put_env(:pado_web, :session_live_test_router_mode, :thinking_then_text)
+
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Think then answer"})
+    |> render_submit()
+
+    assert_receive {:fake_router_stream_stage, :thinking, router_pid}, 1_000
+
+    assert eventually(fn ->
+             render(view) =~ "Thinking through it"
+           end)
+
+    send(router_pid, :release_text_delta)
+    assert_receive {:fake_router_stream_stage, :text, ^router_pid}, 1_000
+
+    assert eventually(fn ->
+             html = render(view)
+
+             html =~ ~s(id="session-streaming-entry-session-a-thinking") and
+               html =~ ~s(id="session-streaming-entry-session-a-text") and
+               html =~ "Thinking through it" and
+               html =~ "Hello visible text"
+           end)
+
+    send(router_pid, :release_done)
+
+    assert eventually(fn ->
+             render(view) =~ "Hello visible text"
            end)
   end
 
