@@ -5,7 +5,47 @@ import {hooks as colocatedHooks} from "phoenix-colocated/pado_web"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+window.addEventListener("phx:clear-chat-composer", event => {
+  const form = document.getElementById(event.detail.id)
+  const textarea = form?.querySelector("textarea[name='message']")
+
+  if (textarea) {
+    textarea.value = ""
+    textarea.dispatchEvent(new Event("input", {bubbles: true}))
+  }
+})
+
 const hooks = {
+  ChatComposer: {
+    mounted() {
+      this.onKeyDown = event => {
+        const isMessageTextarea =
+          event.target instanceof HTMLTextAreaElement && event.target.name === "message"
+
+        if (
+          !isMessageTextarea ||
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.repeat ||
+          event.isComposing ||
+          event.keyCode === 229
+        ) {
+          return
+        }
+
+        event.preventDefault()
+        this.el.requestSubmit()
+      }
+
+      this.el.addEventListener("keydown", this.onKeyDown)
+    },
+    destroyed() {
+      this.el.removeEventListener("keydown", this.onKeyDown)
+    },
+  },
   SessionScroll: {
     mounted() {
       this.scrollToBottom()
