@@ -56,13 +56,13 @@ defmodule PadoWebWeb.DesignSystem do
 
   def chat_composer(assigns) do
     ~H"""
-    <form data-chat-composer phx-submit="send_message" class="bg-base-200/80 px-6 py-4">
-      <div class="mx-auto flex max-w-3xl items-end gap-2">
+    <form data-chat-composer phx-submit="send_message" class="bg-base-200/80 px-6 py-5">
+      <div class="flex w-full items-end gap-2">
         <textarea
           name="message"
           rows="1"
           placeholder={"Message #{@session_id}"}
-          class="textarea textarea-ghost min-h-12 flex-1 resize-none bg-transparent leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
+          class="textarea textarea-ghost min-h-12 flex-1 resize-none bg-transparent px-0 leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
           phx-no-format
         >{@message}</textarea>
         <button
