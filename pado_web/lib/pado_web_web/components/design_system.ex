@@ -50,7 +50,7 @@ defmodule PadoWebWeb.DesignSystem do
         <div :for={part <- entry_content_parts(@entry)} data-content-kind={part.kind}>
           <div
             :if={part.kind == :error}
-            class="alert alert-error items-start py-3 text-sm"
+            class="alert alert-error items-start border-0 py-3 text-sm shadow-none"
           >
             <.icon name="hero-exclamation-triangle" class="mt-0.5 size-4 shrink-0" />
             <div class="min-w-0">
@@ -140,7 +140,7 @@ defmodule PadoWebWeb.DesignSystem do
           <button
             type="submit"
             aria-label="Send message"
-            class="btn btn-primary btn-square shrink-0 rounded-full"
+            class="btn btn-primary btn-square shrink-0 rounded-full border-0 shadow-none"
           >
             <.icon name="hero-paper-airplane" class="size-4" />
           </button>
@@ -160,14 +160,14 @@ defmodule PadoWebWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select model"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full px-2 font-normal"
+        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal shadow-none"
       >
         <span class="truncate">{model_label(@selected)}</span>
         <.icon name="hero-chevron-down" class="size-3" />
       </button>
       <ul
         tabindex="0"
-        class="dropdown-content menu z-10 mb-2 w-56 rounded-box bg-base-100 p-2 shadow"
+        class="dropdown-content menu z-10 mb-2 w-56 rounded-box bg-base-100 p-2 shadow-none"
       >
         <li :for={model <- @options}>
           <button
@@ -198,7 +198,7 @@ defmodule PadoWebWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select intelligence"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full px-2 font-normal"
+        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal shadow-none"
       >
         <.icon name="hero-bolt" class="size-4 text-primary" />
         <span>{reasoning_effort_label(@selected)}</span>
@@ -206,7 +206,7 @@ defmodule PadoWebWeb.DesignSystem do
       </button>
       <ul
         tabindex="0"
-        class="dropdown-content menu z-10 mb-2 w-44 rounded-box bg-base-100 p-2 shadow"
+        class="dropdown-content menu z-10 mb-2 w-44 rounded-box bg-base-100 p-2 shadow-none"
       >
         <li :for={effort <- @options}>
           <button
