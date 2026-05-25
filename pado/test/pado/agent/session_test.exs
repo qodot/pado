@@ -27,33 +27,6 @@ defmodule Pado.Agent.SessionTest do
     end
   end
 
-  describe "to_map/1과 from_map/1" do
-    test "세션 구조체를 저장 가능한 맵으로 왕복한다" do
-      session = %Session{
-        id: "session-1",
-        version: 1,
-        created_at: @now,
-        updated_at: @now,
-        entries: [
-          %Entry{
-            id: "entry-1",
-            seq: 0,
-            kind: :user,
-            payload: %User{content: "hello", timestamp: @now},
-            timestamp: @now
-          }
-        ]
-      }
-
-      assert {:ok, ^session} = session |> Session.to_map() |> Session.from_map()
-    end
-
-    test "type이 session이 아니면 에러를 반환한다" do
-      assert {:error, {:invalid_session_map, %{"type" => "entry"}}} =
-               Session.from_map(%{"type" => "entry"})
-    end
-  end
-
   describe "to_llm_messages/1" do
     test "LLM 메시지 엔트리만 순서대로 반환하고 로그 엔트리는 제외한다" do
       user = %User{content: "hello", timestamp: @now}

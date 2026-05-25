@@ -2,7 +2,18 @@ defmodule Pado.Agent.Session.JSONLTest do
   use ExUnit.Case, async: true
 
   alias Pado.Agent.Session
-  alias Pado.Agent.Session.{CompactionSummary, Entry, Error, JSONL, ModelChange, Store, Summary}
+
+  alias Pado.Agent.Session.{
+    Codec,
+    CompactionSummary,
+    Entry,
+    Error,
+    JSONL,
+    ModelChange,
+    Store,
+    Summary
+  }
+
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Usage
 
@@ -43,7 +54,7 @@ defmodule Pado.Agent.Session.JSONLTest do
     test "이전 세션 헤더는 현재 모델 설정 없이도 읽는다" do
       header =
         Session.new("session-1", timestamp: @now)
-        |> Session.to_map()
+        |> Codec.session_to_map()
         |> Map.delete("entries")
         |> Map.drop(["provider", "model", "reasoning_effort"])
 
