@@ -154,7 +154,8 @@ defmodule Pado.Agent.Session.Entry do
     %{
       "provider" => encode_atom(change.provider),
       "from" => change.from,
-      "to" => change.to
+      "to" => change.to,
+      "reasoning_effort" => encode_atom(change.reasoning_effort)
     }
   end
 
@@ -265,8 +266,15 @@ defmodule Pado.Agent.Session.Entry do
   end
 
   defp decode_payload(:model_change, map) when is_map(map) do
-    with {:ok, provider} <- decode_existing_atom(map["provider"]) do
-      {:ok, %ModelChange{provider: provider, from: map["from"], to: map["to"]}}
+    with {:ok, provider} <- decode_existing_atom(map["provider"]),
+         {:ok, reasoning_effort} <- decode_existing_atom(map["reasoning_effort"]) do
+      {:ok,
+       %ModelChange{
+         provider: provider,
+         from: map["from"],
+         to: map["to"],
+         reasoning_effort: reasoning_effort
+       }}
     end
   end
 

@@ -19,6 +19,49 @@ defmodule Pado.Agent.Session.EntryTest do
       assert {:error, {:invalid_entry_map, %{"type" => "session"}}} =
                Entry.from_map(%{"type" => "session"})
     end
+
+    test "model_change 엔트리에 reasoning effort를 저장한다" do
+      entry = %Entry{
+        id: "entry-1",
+        seq: 0,
+        kind: :model_change,
+        payload: %ModelChange{
+          provider: :openai_codex,
+          from: "gpt-5.3",
+          to: "gpt-5.4",
+          reasoning_effort: :high
+        },
+        timestamp: @now
+      }
+
+      assert {:ok, ^entry} = entry |> Entry.to_map() |> Entry.from_map()
+    end
+
+    test "기존 model_change 엔트리는 reasoning effort 없이도 읽는다" do
+      map = %{
+        "type" => "entry",
+        "id" => "entry-1",
+        "seq" => 0,
+        "kind" => "model_change",
+        "payload" => %{
+          "provider" => "openai_codex",
+          "from" => "gpt-5.3",
+          "to" => "gpt-5.4"
+        },
+        "refs" => %{},
+        "timestamp" => DateTime.to_iso8601(@now)
+      }
+
+      assert {:ok,
+              %Entry{
+                payload: %ModelChange{
+                  provider: :openai_codex,
+                  from: "gpt-5.3",
+                  to: "gpt-5.4",
+                  reasoning_effort: nil
+                }
+              }} = Entry.from_map(map)
+    end
   end
 
   describe "from_message/3" do
