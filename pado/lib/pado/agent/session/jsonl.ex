@@ -114,6 +114,7 @@ defmodule Pado.Agent.Session.JSONL do
        %Summary{
          id: map["id"],
          version: map["version"] || 1,
+         cwd: map["cwd"],
          created_at: created_at,
          updated_at: updated_at
        }}

@@ -49,6 +49,7 @@ defmodule Pado.Agent.Session.JSONLTest do
       assert header["provider"] == "openai_codex"
       assert header["model"] == "gpt-5.4"
       assert header["reasoning_effort"] == "high"
+      assert header["cwd"] == "/tmp/pado-workspace"
     end
 
     test "이전 세션 헤더는 현재 모델 설정 없이도 읽는다" do
@@ -166,8 +167,8 @@ defmodule Pado.Agent.Session.JSONLTest do
 
       assert {:ok,
               [
-                %Summary{id: "new-session", updated_at: @later},
-                %Summary{id: "old-session", updated_at: @now}
+                %Summary{id: "new-session", cwd: "/tmp/pado-workspace", updated_at: @later},
+                %Summary{id: "old-session", cwd: "/tmp/pado-workspace", updated_at: @now}
               ]} = JSONL.list(directory: directory)
     end
 
@@ -179,7 +180,7 @@ defmodule Pado.Agent.Session.JSONLTest do
       on_exit(fn -> File.rm_rf(directory) end)
 
       assert :ok = Store.save(store, session)
-      assert {:ok, [%Summary{id: "session-1"}]} = Store.list(store)
+      assert {:ok, [%Summary{id: "session-1", cwd: "/tmp/pado-workspace"}]} = Store.list(store)
     end
 
     test "잘못된 세션 파일이 있으면 파일 경로와 이유를 반환한다" do
@@ -199,6 +200,7 @@ defmodule Pado.Agent.Session.JSONLTest do
   defp build_session do
     "session-1"
     |> Session.new(
+      cwd: "/tmp/pado-workspace",
       provider: :openai_codex,
       model: "gpt-5.4",
       reasoning_effort: :high,
