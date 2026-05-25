@@ -271,6 +271,32 @@ defmodule PadoWebWeb.SessionLiveTest do
     refute response =~ ~r/<p[^>]*>\s+Hello from assistant/
   end
 
+  test "GET /sessions/:id renders assistant errors as errors", %{conn: conn, store: store} do
+    session =
+      "session-a"
+      |> Session.new()
+      |> append_messages([
+        User.new("Please answer slowly"),
+        %Assistant{
+          content: [],
+          stop_reason: :error,
+          error_message: "Finch stream error: %Mint.TransportError{reason: :timeout}"
+        }
+      ])
+
+    :ok = Store.save(store, session)
+
+    conn = get(conn, ~p"/sessions/session-a")
+
+    response = html_response(conn, 200)
+    assert response =~ "Please answer slowly"
+    assert response =~ "Response timed out"
+    assert response =~ "Finch stream error"
+    assert response =~ "alert-error"
+    assert response =~ ~s(data-content-kind="error")
+    refute response =~ "No text content."
+  end
+
   test "GET /sessions/:id renders the chat composer", %{conn: conn, store: store} do
     :ok = Store.save(store, Session.new("session-a"))
 

@@ -47,16 +47,24 @@ defmodule PadoWebWeb.DesignSystem do
         {entry_label(@entry)}
       </div>
       <div class="space-y-3">
-        <p
-          :for={part <- entry_content_parts(@entry)}
-          data-content-kind={part.kind}
-          class={[
-            "whitespace-pre-wrap break-words text-sm leading-7",
-            part.kind == :thinking && "text-base-content/50",
-            part.kind == :text && "text-base-content"
-          ]}
-          phx-no-format
-        >{part.text}</p>
+        <div :for={part <- entry_content_parts(@entry)} data-content-kind={part.kind}>
+          <div :if={part.kind == :error} class="alert alert-error items-start py-3 text-sm">
+            <.icon name="hero-exclamation-triangle" class="mt-0.5 size-4 shrink-0" />
+            <div class="min-w-0">
+              <div class="font-medium">{part.title}</div>
+              <div class="mt-1 break-words text-xs leading-5 opacity-80">{part.text}</div>
+            </div>
+          </div>
+          <p
+            :if={part.kind != :error}
+            class={[
+              "whitespace-pre-wrap break-words text-sm leading-7",
+              part.kind == :thinking && "text-base-content/50",
+              part.kind == :text && "text-base-content"
+            ]}
+            phx-no-format
+          >{part.text}</p>
+        </div>
       </div>
     </div>
     """
@@ -246,6 +254,12 @@ defmodule PadoWebWeb.DesignSystem do
 
   defp entry_text(%Entry{payload: %Error{} = error}), do: error.message
 
+  defp entry_content_parts(%Entry{
+         payload: %Assistant{stop_reason: :error, content: parts} = message
+       }) do
+    content_parts(parts, fallback: false) ++ [assistant_error_part(message)]
+  end
+
   defp entry_content_parts(%Entry{payload: %Assistant{content: parts}}) do
     content_parts(parts)
   end
@@ -258,7 +272,9 @@ defmodule PadoWebWeb.DesignSystem do
     [%{kind: :text, text: entry_text(entry)}]
   end
 
-  defp content_parts(parts) when is_list(parts) do
+  defp content_parts(parts, opts \\ [])
+
+  defp content_parts(parts, opts) when is_list(parts) do
     parts
     |> Enum.flat_map(fn
       {:thinking, text} when is_binary(text) and text != "" -> [%{kind: :thinking, text: text}]
@@ -266,8 +282,37 @@ defmodule PadoWebWeb.DesignSystem do
       _part -> []
     end)
     |> case do
-      [] -> [%{kind: :text, text: "No text content."}]
+      [] -> content_fallback(opts)
       parts -> parts
+    end
+  end
+
+  defp content_fallback(opts) do
+    if Keyword.get(opts, :fallback, true) do
+      [%{kind: :text, text: "No text content."}]
+    else
+      []
+    end
+  end
+
+  defp assistant_error_part(%Assistant{error_message: message})
+       when is_binary(message) and message != "" do
+    %{kind: :error, title: assistant_error_title(message), text: message}
+  end
+
+  defp assistant_error_part(%Assistant{}) do
+    %{
+      kind: :error,
+      title: "Response error",
+      text: "The response ended with an error."
+    }
+  end
+
+  defp assistant_error_title(message) do
+    if String.contains?(String.downcase(message), "timeout") do
+      "Response timed out"
+    else
+      "Response error"
     end
   end
 
