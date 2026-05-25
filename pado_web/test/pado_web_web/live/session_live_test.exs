@@ -39,8 +39,8 @@ defmodule PadoWebWeb.SessionLiveTest do
   end
 
   test "GET /sessions lists stored sessions", %{conn: conn, store: store} do
-    :ok = Store.save(store, session("session-a"))
-    :ok = Store.save(store, session("session-b"))
+    :ok = Store.save(store, Session.new("session-a"))
+    :ok = Store.save(store, Session.new("session-b"))
 
     conn = get(conn, ~p"/sessions")
 
@@ -51,7 +51,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   end
 
   test "GET /sessions/:id marks the selected session", %{conn: conn, store: store} do
-    :ok = Store.save(store, session("session-a"))
+    :ok = Store.save(store, Session.new("session-a"))
 
     conn = get(conn, ~p"/sessions/session-a")
 
@@ -65,7 +65,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   test "GET /sessions/:id renders stored messages", %{conn: conn, store: store} do
     session =
       "session-a"
-      |> session()
+      |> Session.new()
       |> append_messages([
         User.new("Hello from user"),
         %Assistant{content: [{:text, "Hello from assistant"}]}
@@ -89,7 +89,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   end
 
   test "GET /sessions/:id renders the chat composer", %{conn: conn, store: store} do
-    :ok = Store.save(store, session("session-a"))
+    :ok = Store.save(store, Session.new("session-a"))
 
     conn = get(conn, ~p"/sessions/session-a")
 
@@ -107,7 +107,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   end
 
   test "submitting the chat composer appends a user message", %{conn: conn, store: store} do
-    :ok = Store.save(store, session("session-a"))
+    :ok = Store.save(store, Session.new("session-a"))
 
     {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
 
@@ -147,16 +147,6 @@ defmodule PadoWebWeb.SessionLiveTest do
     response = html_response(conn, 200)
     assert response =~ "Hello from raw user"
     assert response =~ "Hello from raw assistant"
-  end
-
-  defp session(id) do
-    now = DateTime.utc_now()
-
-    %Session{
-      id: id,
-      created_at: now,
-      updated_at: now
-    }
   end
 
   defp append_messages(session, messages) do

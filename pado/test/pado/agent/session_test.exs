@@ -33,42 +33,43 @@ defmodule Pado.Agent.SessionTest do
       assistant = %Assistant{content: [{:text, "hi"}], timestamp: @now}
       tool_result = %ToolResult{tool_call_id: "call-1", tool_name: "echo", timestamp: @now}
 
-      session = %Session{
-        id: "session-1",
-        created_at: @now,
-        updated_at: @now,
-        entries: [
-          %Entry{id: "entry-1", seq: 0, kind: :user, payload: user, timestamp: @now},
-          %Entry{
-            id: "entry-2",
-            seq: 1,
-            kind: :assistant,
-            payload: assistant,
-            timestamp: @now
-          },
-          %Entry{
-            id: "entry-3",
-            seq: 2,
-            kind: :tool_result,
-            payload: tool_result,
-            timestamp: @now
-          },
-          %Entry{
-            id: "entry-4",
-            seq: 3,
-            kind: :model_change,
-            payload: %ModelChange{provider: :openai_codex, from: "gpt-5.3", to: "gpt-5.4"},
-            timestamp: @now
-          },
-          %Entry{
-            id: "entry-5",
-            seq: 4,
-            kind: :error,
-            payload: %Error{message: "failed", reason: "timeout"},
-            timestamp: @now
-          }
-        ]
-      }
+      session =
+        "session-1"
+        |> Session.new(timestamp: @now)
+        |> Map.put(
+          :entries,
+          [
+            %Entry{id: "entry-1", seq: 0, kind: :user, payload: user, timestamp: @now},
+            %Entry{
+              id: "entry-2",
+              seq: 1,
+              kind: :assistant,
+              payload: assistant,
+              timestamp: @now
+            },
+            %Entry{
+              id: "entry-3",
+              seq: 2,
+              kind: :tool_result,
+              payload: tool_result,
+              timestamp: @now
+            },
+            %Entry{
+              id: "entry-4",
+              seq: 3,
+              kind: :model_change,
+              payload: %ModelChange{provider: :openai_codex, from: "gpt-5.3", to: "gpt-5.4"},
+              timestamp: @now
+            },
+            %Entry{
+              id: "entry-5",
+              seq: 4,
+              kind: :error,
+              payload: %Error{message: "failed", reason: "timeout"},
+              timestamp: @now
+            }
+          ]
+        )
 
       assert Session.to_llm_messages(session) == [user, assistant, tool_result]
     end
@@ -76,20 +77,21 @@ defmodule Pado.Agent.SessionTest do
 
   describe "append_messages/3" do
     test "다음 seq부터 메시지 엔트리를 추가하고 updated_at을 갱신한다" do
-      session = %Session{
-        id: "session-1",
-        created_at: @now,
-        updated_at: @now,
-        entries: [
-          %Entry{
-            id: "entry-1",
-            seq: 0,
-            kind: :user,
-            payload: %User{content: "hello", timestamp: @now},
-            timestamp: @now
-          }
-        ]
-      }
+      session =
+        "session-1"
+        |> Session.new(timestamp: @now)
+        |> Map.put(
+          :entries,
+          [
+            %Entry{
+              id: "entry-1",
+              seq: 0,
+              kind: :user,
+              payload: %User{content: "hello", timestamp: @now},
+              timestamp: @now
+            }
+          ]
+        )
 
       message = %Assistant{content: [{:text, "hi"}], timestamp: @now}
       later = ~U[2026-05-17 12:01:00Z]

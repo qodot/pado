@@ -15,16 +15,15 @@ defmodule Pado.Agent.Session.CodecTest do
 
   describe "session_to_map/1과 session_from_map/1" do
     test "세션 구조체를 저장 가능한 맵으로 왕복한다" do
-      session = %Session{
-        id: "session-1",
-        version: 1,
-        provider: :openai_codex,
-        model: "gpt-5.4",
-        reasoning_effort: :high,
-        created_at: @now,
-        updated_at: @now,
-        entries: build_entries()
-      }
+      session =
+        "session-1"
+        |> Session.new(
+          provider: :openai_codex,
+          model: "gpt-5.4",
+          reasoning_effort: :high,
+          timestamp: @now
+        )
+        |> Map.put(:entries, build_entries())
 
       assert {:ok, ^session} = session |> Codec.session_to_map() |> Codec.session_from_map()
     end

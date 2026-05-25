@@ -197,15 +197,16 @@ defmodule Pado.Agent.Session.JSONLTest do
   end
 
   defp build_session do
-    %Session{
-      id: "session-1",
-      version: 1,
+    "session-1"
+    |> Session.new(
       provider: :openai_codex,
       model: "gpt-5.4",
       reasoning_effort: :high,
-      created_at: @now,
-      updated_at: @now,
-      entries: [
+      timestamp: @now
+    )
+    |> Map.put(
+      :entries,
+      [
         %Entry{
           id: "entry-1",
           seq: 0,
@@ -278,7 +279,7 @@ defmodule Pado.Agent.Session.JSONLTest do
           timestamp: @now
         }
       ]
-    }
+    )
   end
 
   defp tmp_path(name) do

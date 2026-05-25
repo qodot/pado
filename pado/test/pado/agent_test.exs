@@ -85,7 +85,12 @@ defmodule Pado.AgentTest do
 
     test "세션 메시지로 Job을 만들고 종료 시 turn을 세션에 추가한다" do
       previous = %User{content: "previous", timestamp: now()}
-      session = session([entry(:user, previous, 0)])
+
+      session = %{
+        Session.new("session-1", timestamp: now())
+        | entries: [entry(:user, previous, 0)]
+      }
+
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
@@ -107,7 +112,7 @@ defmodule Pado.AgentTest do
     end
 
     test "세션 store가 있으면 초기 세션을 저장하고 새 엔트리를 append한다" do
-      session = session([])
+      session = Session.new("session-1", timestamp: now())
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
@@ -136,7 +141,7 @@ defmodule Pado.AgentTest do
 
       config = %{config() | harness: %Harness{tools: [tool]}}
 
-      session = session([])
+      session = Session.new("session-1", timestamp: now())
 
       asst1 = %Assistant{
         content: [{:tool_call, %{id: "call-1", name: "echo", args: %{}}}],
@@ -218,15 +223,6 @@ defmodule Pado.AgentTest do
        {:start, %{message: %Assistant{}}},
        {:done, %{stop_reason: :stop, usage: Usage.empty(), message: final_assistant}}
      ]}
-  end
-
-  defp session(entries) do
-    %Session{
-      id: "session-1",
-      created_at: now(),
-      updated_at: now(),
-      entries: entries
-    }
   end
 
   defp entry(kind, payload, seq) do
