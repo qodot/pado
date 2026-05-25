@@ -10,6 +10,7 @@ defmodule Pado.Agent.Session.Codec do
       "type" => "session",
       "version" => session.version,
       "id" => session.id,
+      "cwd" => session.cwd,
       "provider" => encode_atom(session.provider),
       "model" => session.model,
       "reasoning_effort" => encode_atom(session.reasoning_effort),
@@ -30,6 +31,7 @@ defmodule Pado.Agent.Session.Codec do
        %Session{
          id: map["id"],
          version: map["version"] || 1,
+         cwd: map["cwd"],
          provider: provider,
          model: map["model"],
          reasoning_effort: reasoning_effort,

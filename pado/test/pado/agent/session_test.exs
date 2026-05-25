@@ -9,8 +9,11 @@ defmodule Pado.Agent.SessionTest do
 
   describe "new/2" do
     test "옵션이 없으면 코어 기본 모델 설정으로 만든다" do
+      cwd = File.cwd!()
+
       assert %Session{
                id: "session-1",
+               cwd: ^cwd,
                provider: :openai_codex,
                model: "gpt-5.4-mini",
                reasoning_effort: :medium,
@@ -23,6 +26,7 @@ defmodule Pado.Agent.SessionTest do
     test "생성 시 현재 모델과 reasoning effort를 지정한다" do
       assert %Session{
                id: "session-1",
+               cwd: "/tmp/pado-workspace",
                provider: :openai_codex,
                model: "gpt-5.4",
                reasoning_effort: :high,
@@ -31,6 +35,7 @@ defmodule Pado.Agent.SessionTest do
                entries: []
              } =
                Session.new("session-1",
+                 cwd: "/tmp/pado-workspace",
                  provider: :openai_codex,
                  model: "gpt-5.4",
                  reasoning_effort: :high,

@@ -9,6 +9,7 @@ defmodule Pado.Agent.Session do
   @type t :: %__MODULE__{
           id: String.t(),
           version: pos_integer(),
+          cwd: String.t() | nil,
           provider: atom() | nil,
           model: String.t() | nil,
           reasoning_effort: atom() | nil,
@@ -22,6 +23,7 @@ defmodule Pado.Agent.Session do
     :id,
     :created_at,
     :updated_at,
+    :cwd,
     :provider,
     :model,
     :reasoning_effort,
@@ -36,6 +38,7 @@ defmodule Pado.Agent.Session do
 
     %__MODULE__{
       id: id,
+      cwd: Keyword.get(opts, :cwd, File.cwd!()),
       provider: Keyword.get(opts, :provider, default_model.provider),
       model: Keyword.get(opts, :model, default_model.id),
       reasoning_effort: Keyword.get(opts, :reasoning_effort, @default_reasoning_effort),

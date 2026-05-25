@@ -18,6 +18,7 @@ defmodule Pado.Agent.Session.CodecTest do
       session =
         "session-1"
         |> Session.new(
+          cwd: "/tmp/pado-workspace",
           provider: :openai_codex,
           model: "gpt-5.4",
           reasoning_effort: :high,
@@ -26,6 +27,15 @@ defmodule Pado.Agent.Session.CodecTest do
         |> Map.put(:entries, build_entries())
 
       assert {:ok, ^session} = session |> Codec.session_to_map() |> Codec.session_from_map()
+    end
+
+    test "세션 cwd를 저장 가능한 맵에 포함한다" do
+      map =
+        "session-1"
+        |> Session.new(cwd: "/tmp/pado-workspace", timestamp: @now)
+        |> Codec.session_to_map()
+
+      assert map["cwd"] == "/tmp/pado-workspace"
     end
 
     test "type이 session이 아니면 에러를 반환한다" do
