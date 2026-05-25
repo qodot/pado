@@ -189,11 +189,12 @@ defmodule PadoWebWeb.SessionLive do
   end
 
   def handle_event("create_session", _params, socket) do
-    session = Session.new(new_session_id())
+    case cwd_picker().pick() do
+      {:ok, cwd} ->
+        create_session(socket, cwd)
 
-    case Store.save(session_store(), session) do
-      :ok ->
-        {:noreply, push_patch(socket, to: ~p"/sessions/#{session.id}")}
+      :cancel ->
+        {:noreply, socket}
 
       {:error, reason} ->
         {:noreply, assign(socket, :sessions_error, reason)}
@@ -464,6 +465,22 @@ defmodule PadoWebWeb.SessionLive do
 
   defp session_store do
     {Pado.Agent.Session.JSONL, directory: sessions_directory()}
+  end
+
+  defp cwd_picker do
+    Application.get_env(:pado_web, :session_cwd_picker, PadoWeb.SessionCwdPicker)
+  end
+
+  defp create_session(socket, cwd) do
+    session = Session.new(new_session_id(), cwd: cwd)
+
+    case Store.save(session_store(), session) do
+      :ok ->
+        {:noreply, push_patch(socket, to: ~p"/sessions/#{session.id}")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :sessions_error, reason)}
+    end
   end
 
   defp sessions_directory do

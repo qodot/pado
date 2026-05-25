@@ -120,6 +120,14 @@ defmodule PadoWebWeb.SessionLiveTest do
     def save(_creds, _owner), do: :ok
   end
 
+  defmodule FakeCwdPicker do
+    def pick do
+      owner = Application.fetch_env!(:pado_web, :session_live_test_owner)
+      send(owner, :fake_cwd_picker_called)
+      Application.fetch_env!(:pado_web, :session_live_test_cwd_picker_result)
+    end
+  end
+
   setup do
     directory =
       System.tmp_dir!()
@@ -129,11 +137,24 @@ defmodule PadoWebWeb.SessionLiveTest do
     previous_router = Application.get_env(:pado_web, :llm_router)
     previous_owner = Application.get_env(:pado_web, :session_live_test_owner)
     previous_router_mode = Application.get_env(:pado_web, :session_live_test_router_mode)
+    previous_cwd_picker = Application.get_env(:pado_web, :session_cwd_picker)
+
+    previous_cwd_picker_result =
+      Application.get_env(:pado_web, :session_live_test_cwd_picker_result)
+
     previous_credentials = Application.get_env(:pado, :credentials)
 
     Application.put_env(:pado_web, :sessions_directory, directory)
     Application.put_env(:pado_web, :llm_router, FakeRouter)
     Application.put_env(:pado_web, :session_live_test_owner, self())
+    Application.put_env(:pado_web, :session_cwd_picker, FakeCwdPicker)
+
+    Application.put_env(
+      :pado_web,
+      :session_live_test_cwd_picker_result,
+      {:ok, "/tmp/pado-project"}
+    )
+
     Application.delete_env(:pado_web, :session_live_test_router_mode)
 
     Application.put_env(:pado, :credentials, %{
@@ -163,6 +184,22 @@ defmodule PadoWebWeb.SessionLiveTest do
         Application.put_env(:pado_web, :session_live_test_router_mode, previous_router_mode)
       else
         Application.delete_env(:pado_web, :session_live_test_router_mode)
+      end
+
+      if previous_cwd_picker do
+        Application.put_env(:pado_web, :session_cwd_picker, previous_cwd_picker)
+      else
+        Application.delete_env(:pado_web, :session_cwd_picker)
+      end
+
+      if previous_cwd_picker_result do
+        Application.put_env(
+          :pado_web,
+          :session_live_test_cwd_picker_result,
+          previous_cwd_picker_result
+        )
+      else
+        Application.delete_env(:pado_web, :session_live_test_cwd_picker_result)
       end
 
       if previous_credentials do
@@ -200,12 +237,17 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ ~s(href="/sessions/session-a")
   end
 
-  test "clicking New session creates a default session and opens it", %{conn: conn, store: store} do
+  test "clicking New session chooses cwd, creates a default session, and opens it", %{
+    conn: conn,
+    store: store
+  } do
     {:ok, view, _html} = live(conn, ~p"/sessions")
 
     view
     |> element(~s(button[aria-label="New session"]))
     |> render_click()
+
+    assert_receive :fake_cwd_picker_called
 
     path = assert_patch(view)
     assert path =~ ~r|^/sessions/session-|
@@ -219,11 +261,26 @@ defmodule PadoWebWeb.SessionLiveTest do
               provider: :openai_codex,
               model: "gpt-5.4-mini",
               reasoning_effort: :medium,
+              cwd: "/tmp/pado-project",
               entries: []
             }} = Store.load(store, summary.id)
 
     assert session_id == summary.id
     assert render(view) =~ session_id
+  end
+
+  test "canceling cwd selection does not create a session", %{conn: conn, store: store} do
+    Application.put_env(:pado_web, :session_live_test_cwd_picker_result, :cancel)
+
+    {:ok, view, _html} = live(conn, ~p"/sessions")
+
+    view
+    |> element(~s(button[aria-label="New session"]))
+    |> render_click()
+
+    assert_receive :fake_cwd_picker_called
+    assert {:ok, []} = Store.list(store)
+    assert render(view) =~ "No sessions yet."
   end
 
   test "GET /sessions/:id marks the selected session", %{conn: conn, store: store} do
