@@ -9,7 +9,7 @@ defmodule Pado.Agent.Session do
   @type t :: %__MODULE__{
           id: String.t(),
           version: pos_integer(),
-          cwd: String.t() | nil,
+          cwd: String.t(),
           provider: atom() | nil,
           model: String.t() | nil,
           reasoning_effort: atom() | nil,
@@ -18,7 +18,7 @@ defmodule Pado.Agent.Session do
           updated_at: DateTime.t()
         }
 
-  @enforce_keys [:id, :created_at, :updated_at]
+  @enforce_keys [:id, :cwd, :created_at, :updated_at]
   defstruct [
     :id,
     :created_at,
