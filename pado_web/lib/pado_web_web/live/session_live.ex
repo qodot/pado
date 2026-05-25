@@ -47,7 +47,17 @@ defmodule PadoWebWeb.SessionLive do
               <p class="text-xs font-medium uppercase text-base-content/60">Workspace</p>
               <h1 class="text-lg font-semibold">Sessions</h1>
             </div>
-            <span class="badge badge-neutral">{length(@sessions)}</span>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-neutral">{length(@sessions)}</span>
+              <button
+                type="button"
+                phx-click="create_session"
+                aria-label="New session"
+                class="btn btn-primary btn-square btn-sm rounded-full"
+              >
+                <.icon name="hero-plus" class="size-4" />
+              </button>
+            </div>
           </div>
 
           <div :if={@sessions_error} class="p-3">
@@ -155,6 +165,18 @@ defmodule PadoWebWeb.SessionLive do
     end
   end
 
+  def handle_event("create_session", _params, socket) do
+    session = Session.new(new_session_id())
+
+    case Store.save(session_store(), session) do
+      :ok ->
+        {:noreply, push_patch(socket, to: ~p"/sessions/#{session.id}")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :sessions_error, reason)}
+    end
+  end
+
   defp assign_selected_session(socket, nil) do
     assign(socket, selected_session: nil, selected_session_error: nil)
   end
@@ -204,5 +226,11 @@ defmodule PadoWebWeb.SessionLive do
 
   defp sessions_directory do
     Application.get_env(:pado_web, :sessions_directory, @default_sessions_directory)
+  end
+
+  defp new_session_id do
+    timestamp = System.system_time(:millisecond)
+    suffix = System.unique_integer([:positive, :monotonic])
+    "session-#{timestamp}-#{suffix}"
   end
 end

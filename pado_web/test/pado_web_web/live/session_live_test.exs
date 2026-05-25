@@ -36,6 +36,7 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ "Pado Web"
     assert response =~ "Sessions"
     assert response =~ "Select a session"
+    assert response =~ ~s(aria-label="New session")
   end
 
   test "GET /sessions lists stored sessions", %{conn: conn, store: store} do
@@ -48,6 +49,32 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ "session-a"
     assert response =~ "session-b"
     assert response =~ ~s(href="/sessions/session-a")
+  end
+
+  test "clicking New session creates a default session and opens it", %{conn: conn, store: store} do
+    {:ok, view, _html} = live(conn, ~p"/sessions")
+
+    view
+    |> element(~s(button[aria-label="New session"]))
+    |> render_click()
+
+    path = assert_patch(view)
+    assert path =~ ~r|^/sessions/session-|
+
+    assert {:ok, [summary]} = Store.list(store)
+    assert path == ~p"/sessions/#{summary.id}"
+
+    assert {:ok,
+            %Session{
+              id: session_id,
+              provider: :openai_codex,
+              model: "gpt-5.4-mini",
+              reasoning_effort: :medium,
+              entries: []
+            }} = Store.load(store, summary.id)
+
+    assert session_id == summary.id
+    assert render(view) =~ session_id
   end
 
   test "GET /sessions/:id marks the selected session", %{conn: conn, store: store} do
