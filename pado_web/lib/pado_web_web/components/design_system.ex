@@ -137,7 +137,7 @@ defmodule PadoWebWeb.DesignSystem do
           <button
             type="submit"
             aria-label="Send message"
-            class="btn btn-primary btn-square shrink-0 rounded-full"
+            class="btn btn-primary btn-square shrink-0 rounded-full border-0"
           >
             <.icon name="hero-paper-airplane" class="size-4" />
           </button>
@@ -157,7 +157,7 @@ defmodule PadoWebWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select model"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full px-2 font-normal"
+        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal"
       >
         <span class="truncate">{model_label(@selected)}</span>
         <.icon name="hero-chevron-down" class="size-3" />
@@ -195,7 +195,7 @@ defmodule PadoWebWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select intelligence"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full px-2 font-normal"
+        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal"
       >
         <.icon name="hero-bolt" class="size-4 text-primary" />
         <span>{reasoning_effort_label(@selected)}</span>
