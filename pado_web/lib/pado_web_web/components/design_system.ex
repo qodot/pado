@@ -62,7 +62,7 @@ defmodule PadoWebWeb.DesignSystem do
           name="message"
           rows="1"
           placeholder={"Message #{@session_id}"}
-          class="textarea textarea-ghost min-h-12 flex-1 resize-none bg-transparent leading-6 focus:bg-transparent focus:outline-primary/40"
+          class="textarea textarea-ghost min-h-12 flex-1 resize-none bg-transparent leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
           phx-no-format
         >{@message}</textarea>
         <button
