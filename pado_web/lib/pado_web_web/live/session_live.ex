@@ -130,7 +130,7 @@ defmodule PadoWebWeb.SessionLive do
               phx-hook="SessionScroll"
               class="min-h-0 flex-1 overflow-y-auto px-[72px] py-5"
             >
-              <div class="mx-auto flex max-w-3xl flex-col gap-4">
+              <div class="flex flex-col gap-4">
                 <.session_entry :for={entry <- @selected_session.entries} entry={entry} />
                 <.session_streaming_entry
                   :if={@streaming_response}

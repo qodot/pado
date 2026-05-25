@@ -42,7 +42,7 @@ defmodule PadoWebWeb.DesignSystem do
       </div>
     </div>
 
-    <div :if={@entry.kind != :user} data-entry-kind={entry_kind(@entry)} class="max-w-3xl py-2">
+    <div :if={@entry.kind != :user} data-entry-kind={entry_kind(@entry)} class="py-2">
       <div :if={entry_label(@entry)} class="mb-1 text-xs text-base-content/45">
         {entry_label(@entry)}
       </div>
@@ -76,7 +76,7 @@ defmodule PadoWebWeb.DesignSystem do
 
   def session_streaming_entry(assigns) do
     ~H"""
-    <div id={@id} data-entry-kind="assistant" data-streaming-entry class="max-w-3xl py-2">
+    <div id={@id} data-entry-kind="assistant" data-streaming-entry class="py-2">
       <p
         id={"#{@id}-thinking"}
         class={[
