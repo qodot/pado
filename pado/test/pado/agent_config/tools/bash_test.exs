@@ -40,6 +40,19 @@ defmodule Pado.AgentConfig.Tools.BashTest do
       assert result =~ "err"
     end
 
+    test "ctx의 cwd에서 명령을 실행한다" do
+      directory = tmp_path("bash-cwd")
+      File.mkdir_p!(directory)
+
+      %AgentTool{async: async} = Bash.tool()
+      result = run_async(async, %{"command" => "pwd"}, %{cwd: directory})
+
+      assert result =~ "exit_code: 0"
+      assert result =~ directory
+
+      File.rm_rf!(directory)
+    end
+
     test "args의 timeout을 넘기면 그 시간 안에 끝나지 않는 명령은 잘린다" do
       %AgentTool{async: async} = Bash.tool()
       result = run_async(async, %{"command" => "sleep 5", "timeout" => 1}, %{})
@@ -103,5 +116,10 @@ defmodule Pado.AgentConfig.Tools.BashTest do
   defp run_async(async, args, ctx) do
     async.(args, ctx)
     |> Task.await(:infinity)
+  end
+
+  defp tmp_path(name) do
+    System.tmp_dir!()
+    |> Path.join("pado-bash-test-#{System.unique_integer([:positive])}-#{name}")
   end
 end

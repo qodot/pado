@@ -306,6 +306,28 @@ defmodule Pado.Agent.TurnTest do
       assert tr2.content == [{:text, "bye"}]
     end
 
+    test "tool async에는 job cwd가 context로 전달된다", %{send_event: send_event, creds: creds} do
+      parent = self()
+
+      tool =
+        make_tool("echo", fn _args, ctx ->
+          send(parent, {:tool_ctx, ctx})
+          "ok"
+        end)
+
+      assistant = %Assistant{
+        content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]
+      }
+
+      Pado.Test.FakeLLM.put_response(ok_stream(assistant))
+
+      {agent, job} = build_setup(creds, tools: [tool])
+      job = %{job | cwd: "/tmp/pado-workspace"}
+
+      assert {:ok, %Job{}} = Turn.take(agent, job, send_event)
+      assert_receive {:tool_ctx, %{cwd: "/tmp/pado-workspace"}}
+    end
+
     test "알 수 없는 tool은 ToolResult.error로 turn에 들어간다", %{send_event: send_event, creds: creds} do
       asst = %Assistant{
         content: [{:tool_call, %{id: "c1", name: "missing", args: %{}}}]

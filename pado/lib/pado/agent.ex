@@ -240,6 +240,7 @@ defmodule Pado.Agent do
     %Job{
       messages: Session.to_llm_messages(session),
       session_id: session.id,
+      cwd: session.cwd,
       job_id: Keyword.get(opts, :job_id, new_job_id()),
       max_turns: Keyword.get(opts, :max_turns, 10)
     }

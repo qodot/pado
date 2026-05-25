@@ -50,11 +50,11 @@ defmodule Pado.AgentConfig.Tools.Bash do
     :ok
   end
 
-  defp execute(%{"command" => cmd} = args, _ctx, timeout) when is_binary(cmd) do
+  defp execute(%{"command" => cmd} = args, ctx, timeout) when is_binary(cmd) do
     timeout = Map.get(args, "timeout", timeout)
     timeout_ms = timeout * 1000
 
-    task = Task.async(fn -> System.shell(cmd, stderr_to_stdout: true) end)
+    task = Task.async(fn -> System.shell(cmd, shell_opts(ctx)) end)
 
     case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
       {:ok, {output, exit_code}} ->
@@ -64,6 +64,9 @@ defmodule Pado.AgentConfig.Tools.Bash do
         "Command timed out after #{timeout} seconds"
     end
   end
+
+  defp shell_opts(%{cwd: cwd}) when is_binary(cwd), do: [stderr_to_stdout: true, cd: cwd]
+  defp shell_opts(_ctx), do: [stderr_to_stdout: true]
 
   defp format_result(output, exit_code) do
     case truncate(output) do

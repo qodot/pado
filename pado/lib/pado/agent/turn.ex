@@ -120,7 +120,7 @@ defmodule Pado.Agent.Turn do
     assistant
     |> tool_calls()
     |> Enum.map(fn call ->
-      case start_tool(call, agent.harness.tools) do
+      case start_tool(call, agent.harness.tools, tool_context(job)) do
         {:ok, task, abort} ->
           send_job_event.(
             {:tool_execution_start,
@@ -176,12 +176,20 @@ defmodule Pado.Agent.Turn do
   @doc false
   @spec start_tool(Message.tool_call(), [Tool.t()]) ::
           {:ok, Task.t(), (Task.t() -> any())} | {:error, ToolResult.t()}
-  def start_tool(%{id: id, name: name, args: args}, tools) do
+  def start_tool(call, tools), do: start_tool(call, tools, %{})
+
+  @doc false
+  @spec start_tool(Message.tool_call(), [Tool.t()], map()) ::
+          {:ok, Task.t(), (Task.t() -> any())} | {:error, ToolResult.t()}
+  def start_tool(%{id: id, name: name, args: args}, tools, ctx) do
     case find_tool(tools, name) do
       nil -> {:error, ToolResult.error(id, name, "unknown tool: #{name}")}
-      %Tool{async: async, abort: abort} -> {:ok, async.(args, %{}), abort}
+      %Tool{async: async, abort: abort} -> {:ok, async.(args, ctx), abort}
     end
   end
+
+  defp tool_context(%Job{cwd: cwd}) when is_binary(cwd), do: %{cwd: cwd}
+  defp tool_context(%Job{}), do: %{}
 
   @doc false
   @spec dispatch_tool(Message.tool_call(), Task.t()) :: ToolResult.t()

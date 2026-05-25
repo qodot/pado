@@ -5,6 +5,7 @@ defmodule Pado.Agent.Job do
 
   @type t :: %__MODULE__{
           session_id: String.t(),
+          cwd: String.t() | nil,
           job_id: String.t() | nil,
           messages: [LLMMessage.t()],
           turns: [Turn.t()],
@@ -15,6 +16,7 @@ defmodule Pado.Agent.Job do
   @enforce_keys [:messages, :session_id]
   defstruct [
     :session_id,
+    :cwd,
     :job_id,
     messages: [],
     turns: [],

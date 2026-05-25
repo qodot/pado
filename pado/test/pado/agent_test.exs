@@ -174,6 +174,40 @@ defmodule Pado.AgentTest do
       refute_receive {:store_append, "session-1", _}, 50
     end
 
+    test "세션 cwd를 tool context로 전달한다" do
+      parent = self()
+
+      tool = %Pado.AgentConfig.Tools.Tool{
+        schema: Pado.LLM.Tool.new("echo", "d", %{}),
+        async: fn _args, ctx ->
+          send(parent, {:tool_ctx, ctx})
+          Task.async(fn -> "result" end)
+        end,
+        abort: fn task -> Task.shutdown(task, :brutal_kill) end
+      }
+
+      config = %{config() | harness: %Harness{tools: [tool]}}
+      session = Session.new("session-1", cwd: "/tmp/pado-workspace", timestamp: now())
+
+      assistant = %Assistant{
+        content: [{:tool_call, %{id: "call-1", name: "echo", args: %{}}}],
+        timestamp: now()
+      }
+
+      Pado.Test.FakeLLM.put_response(ok_stream(assistant))
+
+      {:ok, agent} = Agent.spawn(config, session: session)
+      collector = collect_stream(agent)
+
+      assert :ok = wait_until_subscriber_count(agent, 1)
+      assert :ok = Agent.start(agent, "next", job_id: "job-1")
+
+      events = Task.await(collector, 500)
+
+      assert_receive {:tool_ctx, %{cwd: "/tmp/pado-workspace"}}
+      assert {:job_end, %{session: %Session{}}} = List.last(events)
+    end
+
     test "세션 없이 메시지로 시작하면 에러를 반환한다" do
       {:ok, agent} = Agent.spawn(config())
 
