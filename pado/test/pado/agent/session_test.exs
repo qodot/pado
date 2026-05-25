@@ -7,6 +7,26 @@ defmodule Pado.Agent.SessionTest do
 
   @now ~U[2026-05-17 12:00:00Z]
 
+  describe "new/2" do
+    test "생성 시 현재 모델과 reasoning effort를 지정한다" do
+      assert %Session{
+               id: "session-1",
+               provider: :openai_codex,
+               model: "gpt-5.4",
+               reasoning_effort: :high,
+               created_at: @now,
+               updated_at: @now,
+               entries: []
+             } =
+               Session.new("session-1",
+                 provider: :openai_codex,
+                 model: "gpt-5.4",
+                 reasoning_effort: :high,
+                 timestamp: @now
+               )
+    end
+  end
+
   describe "to_map/1과 from_map/1" do
     test "세션 구조체를 저장 가능한 맵으로 왕복한다" do
       session = %Session{

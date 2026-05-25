@@ -6,6 +6,9 @@ defmodule Pado.Agent.Session do
   @type t :: %__MODULE__{
           id: String.t(),
           version: pos_integer(),
+          provider: atom() | nil,
+          model: String.t() | nil,
+          reasoning_effort: atom() | nil,
           entries: [Entry.t()],
           created_at: DateTime.t(),
           updated_at: DateTime.t()
@@ -16,9 +19,26 @@ defmodule Pado.Agent.Session do
     :id,
     :created_at,
     :updated_at,
+    :provider,
+    :model,
+    :reasoning_effort,
     version: 1,
     entries: []
   ]
+
+  @spec new(String.t(), keyword()) :: t()
+  def new(id, opts \\ []) when is_binary(id) and is_list(opts) do
+    timestamp = Keyword.get(opts, :timestamp, DateTime.utc_now())
+
+    %__MODULE__{
+      id: id,
+      provider: Keyword.get(opts, :provider),
+      model: Keyword.get(opts, :model),
+      reasoning_effort: Keyword.get(opts, :reasoning_effort),
+      created_at: timestamp,
+      updated_at: timestamp
+    }
+  end
 
   @spec to_llm_messages(t()) :: [Message.t()]
   def to_llm_messages(%__MODULE__{} = session) do
