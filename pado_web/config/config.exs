@@ -3,6 +3,12 @@ import Config
 config :pado_web,
   generators: [timestamp_type: :utc_datetime]
 
+config :pado,
+  credentials: %{
+    openai_codex:
+      {Pado.LLM.Credential.FileLoader, Path.expand("~/.config/pado/openai_codex.json")}
+  }
+
 config :pado_web, PadoWebWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
