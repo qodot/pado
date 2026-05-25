@@ -3,7 +3,10 @@ defmodule PadoWebWeb.SessionLiveTest do
 
   alias Pado.Agent.Session
   alias Pado.Agent.Session.Store
+  alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, User}
+
+  import Phoenix.LiveViewTest
 
   setup do
     directory =
@@ -55,6 +58,8 @@ defmodule PadoWebWeb.SessionLiveTest do
     response = html_response(conn, 200)
     assert response =~ "Active session"
     assert response =~ "session-a"
+    assert response =~ "status-primary"
+    refute response =~ "status-success"
   end
 
   test "GET /sessions/:id renders stored messages", %{conn: conn, store: store} do
@@ -79,6 +84,41 @@ defmodule PadoWebWeb.SessionLiveTest do
     refute response =~ "chat-bubble"
     refute response =~ "Assistant"
     refute response =~ ~r/<p[^>]*>\s+Hello from assistant/
+  end
+
+  test "GET /sessions/:id renders the chat composer", %{conn: conn, store: store} do
+    :ok = Store.save(store, session("session-a"))
+
+    conn = get(conn, ~p"/sessions/session-a")
+
+    response = html_response(conn, 200)
+    assert response =~ ~s(data-chat-composer)
+    assert response =~ ~s(name="message")
+    assert response =~ "bg-base-200/80"
+    assert response =~ "textarea-ghost"
+    refute response =~ "textarea-bordered"
+    assert response =~ "Message session-a"
+    assert response =~ ~s(aria-label="Send message")
+    assert response =~ "btn-square"
+    assert response =~ "rounded-full"
+    refute response =~ ~r/<span>\s*Send\s*<\/span>/
+  end
+
+  test "submitting the chat composer appends a user message", %{conn: conn, store: store} do
+    :ok = Store.save(store, session("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    html =
+      view
+      |> form("form[data-chat-composer]", %{message: "Hello from composer"})
+      |> render_submit()
+
+    assert html =~ "Hello from composer"
+
+    assert {:ok, saved_session} = Store.load(store, "session-a")
+    assert [%{kind: :user, payload: payload}] = saved_session.entries
+    assert Message.text(payload) == "Hello from composer"
   end
 
   test "GET /sessions/:id renders assistant entries before provider modules are loaded", %{

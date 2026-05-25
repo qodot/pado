@@ -1,6 +1,8 @@
 defmodule PadoWebWeb.DesignSystem do
   use Phoenix.Component
 
+  import PadoWebWeb.CoreComponents, only: [icon: 1]
+
   alias Pado.Agent.Session.Entry
   alias Pado.Agent.Session.{CompactionSummary, Error, ModelChange}
   alias Pado.LLM.Message
@@ -46,6 +48,32 @@ defmodule PadoWebWeb.DesignSystem do
       </div>
       <p class="whitespace-pre-wrap break-words text-sm leading-7 text-base-content" phx-no-format>{entry_text(@entry)}</p>
     </div>
+    """
+  end
+
+  attr :session_id, :string, required: true
+  attr :message, :string, default: ""
+
+  def chat_composer(assigns) do
+    ~H"""
+    <form data-chat-composer phx-submit="send_message" class="bg-base-200/80 px-6 py-4">
+      <div class="mx-auto flex max-w-3xl items-end gap-2">
+        <textarea
+          name="message"
+          rows="1"
+          placeholder={"Message #{@session_id}"}
+          class="textarea textarea-ghost min-h-12 flex-1 resize-none bg-transparent leading-6 focus:bg-transparent focus:outline-primary/40"
+          phx-no-format
+        >{@message}</textarea>
+        <button
+          type="submit"
+          aria-label="Send message"
+          class="btn btn-primary btn-square shrink-0 rounded-full"
+        >
+          <.icon name="hero-paper-airplane" class="size-4" />
+        </button>
+      </div>
+    </form>
     """
   end
 

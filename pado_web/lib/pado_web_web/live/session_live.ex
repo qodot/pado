@@ -1,7 +1,9 @@
 defmodule PadoWebWeb.SessionLive do
   use PadoWebWeb, :live_view
 
+  alias Pado.Agent.Session
   alias Pado.Agent.Session.Store
+  alias Pado.LLM.Message.User
 
   @default_sessions_directory Path.expand("~/.config/pado/sessions")
 
@@ -13,6 +15,7 @@ defmodule PadoWebWeb.SessionLive do
         selected_id: nil,
         selected_session: nil,
         selected_session_error: nil,
+        message: "",
         sessions: [],
         sessions_error: nil
       )
@@ -75,7 +78,7 @@ defmodule PadoWebWeb.SessionLive do
           <div :if={@selected_id} class="flex h-full flex-col">
             <div class="px-6 py-5">
               <div class="flex items-center gap-2">
-                <span class="status status-success" />
+                <span class="status status-primary" />
                 <p class="text-sm font-medium text-base-content/60">Active session</p>
               </div>
               <h2 class="mt-1 truncate text-xl font-semibold">{@selected_id}</h2>
@@ -102,12 +105,18 @@ defmodule PadoWebWeb.SessionLive do
 
             <div
               :if={@selected_session && @selected_session.entries != []}
-              class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-2"
+              class="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-2"
             >
               <div class="mx-auto flex max-w-3xl flex-col gap-4">
                 <.session_entry :for={entry <- @selected_session.entries} entry={entry} />
               </div>
             </div>
+
+            <.chat_composer
+              :if={@selected_session && !@selected_session_error}
+              session_id={@selected_id}
+              message={@message}
+            />
           </div>
 
           <div
@@ -126,6 +135,22 @@ defmodule PadoWebWeb.SessionLive do
       </div>
     </Layouts.app>
     """
+  end
+
+  @impl true
+  def handle_event("send_message", %{"message" => message}, socket) do
+    message = String.trim(message)
+
+    cond do
+      message == "" ->
+        {:noreply, assign(socket, :message, "")}
+
+      is_nil(socket.assigns.selected_session) ->
+        {:noreply, socket}
+
+      true ->
+        append_user_message(socket, message)
+    end
   end
 
   defp assign_selected_session(socket, nil) do
@@ -149,6 +174,25 @@ defmodule PadoWebWeb.SessionLive do
 
       {:error, reason} ->
         assign(socket, sessions: [], sessions_error: reason)
+    end
+  end
+
+  defp append_user_message(socket, message) do
+    {session, _entries} =
+      Session.append_messages(socket.assigns.selected_session, [User.new(message)])
+
+    case Store.save(session_store(), session) do
+      :ok ->
+        socket =
+          socket
+          |> assign(:selected_session, session)
+          |> assign(:message, "")
+          |> assign_sessions()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :selected_session_error, reason)}
     end
   end
 
