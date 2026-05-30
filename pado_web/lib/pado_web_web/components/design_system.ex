@@ -112,6 +112,26 @@ defmodule PadoWebWeb.DesignSystem do
     """
   end
 
+  attr :id, :string, required: true
+  attr :tool, :map, required: true
+
+  def session_running_tool(assigns) do
+    ~H"""
+    <div id={@id} data-tool-execution-start class="py-2">
+      <div class="inline-flex max-w-full items-center gap-2 rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/70">
+        <span class="loading loading-spinner loading-xs shrink-0 text-primary" />
+        <span class="shrink-0 font-medium text-base-content">Running {@tool.name}</span>
+        <code
+          :if={tool_args_summary(@tool.args) != ""}
+          class="min-w-0 truncate rounded bg-base-300 px-1.5 py-0.5 text-xs text-base-content/70"
+        >
+          {tool_args_summary(@tool.args)}
+        </code>
+      </div>
+    </div>
+    """
+  end
+
   attr :session_id, :string, required: true
   attr :id, :string, required: true
   attr :message, :string, default: ""
@@ -333,6 +353,12 @@ defmodule PadoWebWeb.DesignSystem do
       text -> text
     end
   end
+
+  defp tool_args_summary(%{"command" => command}) when is_binary(command) do
+    String.slice(command, 0, 160)
+  end
+
+  defp tool_args_summary(_args), do: ""
 
   defp markdown_html(text) when is_binary(text) do
     text

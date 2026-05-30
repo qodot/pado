@@ -24,6 +24,7 @@ defmodule PadoWebWeb.SessionLive do
         selected_session_error: nil,
         message: "",
         streaming_response: nil,
+        streaming_tools: [],
         running_session_id: nil,
         sessions: [],
         sessions_error: nil,
@@ -42,6 +43,7 @@ defmodule PadoWebWeb.SessionLive do
       socket
       |> assign(:selected_id, selected_id)
       |> maybe_clear_streaming_response(selected_id)
+      |> maybe_clear_streaming_tools(selected_id)
       |> assign_sessions()
       |> assign_selected_session(selected_id)
 
@@ -139,6 +141,11 @@ defmodule PadoWebWeb.SessionLive do
                   id={streaming_entry_id(@selected_id)}
                   text={@streaming_response.text}
                   thinking={@streaming_response.thinking}
+                />
+                <.session_running_tool
+                  :for={tool <- @streaming_tools}
+                  id={running_tool_id(tool.id)}
+                  tool={tool}
                 />
               </div>
             </div>
@@ -245,6 +252,17 @@ defmodule PadoWebWeb.SessionLive do
     {:noreply, socket}
   end
 
+  def handle_info({:agent_event, session_id, {:tool_execution_start, data}}, socket) do
+    socket =
+      if active_stream?(socket, session_id) do
+        append_streaming_tool(socket, data)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_info({:agent_event, _session_id, _event}, socket), do: {:noreply, socket}
 
   defp assign_selected_session(socket, nil) do
@@ -284,6 +302,7 @@ defmodule PadoWebWeb.SessionLive do
         |> assign(:selected_session, session)
         |> assign(:message, "")
         |> assign(:streaming_response, empty_streaming_response())
+        |> assign(:streaming_tools, [])
         |> assign(:running_session_id, session.id)
         |> assign_sessions()
         |> push_event("clear-chat-composer", %{id: chat_composer_id(session.id)})
@@ -370,6 +389,22 @@ defmodule PadoWebWeb.SessionLive do
 
   defp append_streaming_event(socket, _event), do: socket
 
+  defp append_streaming_tool(socket, data) do
+    tool = %{
+      id: data.tool_call_id,
+      name: data.tool_name,
+      args: data.args || %{},
+      turn_index: data.turn_index
+    }
+
+    streaming_tools =
+      socket.assigns.streaming_tools
+      |> Enum.reject(&(&1.id == tool.id))
+      |> Kernel.++([tool])
+
+    assign(socket, :streaming_tools, streaming_tools)
+  end
+
   defp append_streaming_delta(socket, field, delta) do
     response = socket.assigns.streaming_response || empty_streaming_response()
 
@@ -379,7 +414,7 @@ defmodule PadoWebWeb.SessionLive do
   defp finish_agent_stream(socket, session_id, data) do
     socket =
       if socket.assigns.running_session_id == session_id do
-        assign(socket, running_session_id: nil, streaming_response: nil)
+        assign(socket, running_session_id: nil, streaming_response: nil, streaming_tools: [])
       else
         socket
       end
@@ -414,6 +449,14 @@ defmodule PadoWebWeb.SessionLive do
       socket
     else
       assign(socket, :streaming_response, nil)
+    end
+  end
+
+  defp maybe_clear_streaming_tools(socket, selected_id) do
+    if socket.assigns[:running_session_id] == selected_id do
+      socket
+    else
+      assign(socket, :streaming_tools, [])
     end
   end
 
@@ -496,6 +539,7 @@ defmodule PadoWebWeb.SessionLive do
 
   defp chat_composer_id(session_id), do: "chat-composer-#{session_id}"
   defp streaming_entry_id(session_id), do: "session-streaming-entry-#{session_id}"
+  defp running_tool_id(tool_call_id), do: "session-running-tool-#{tool_call_id}"
 
   defp model_options do
     OpenAICodex.all()

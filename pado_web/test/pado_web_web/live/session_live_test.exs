@@ -10,7 +10,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   import Phoenix.LiveViewTest
 
   defmodule FakeRouter do
-    alias Pado.LLM.Message.Assistant
+    alias Pado.LLM.Message.{Assistant, ToolResult}
 
     def stream(model, ctx, creds, session_id, opts) do
       owner = Application.fetch_env!(:pado_web, :session_live_test_owner)
@@ -22,10 +22,10 @@ defmodule PadoWebWeb.SessionLiveTest do
          %{model: model, ctx: ctx, creds: creds, session_id: session_id, opts: opts}}
       )
 
-      {:ok, fake_stream(owner, mode, model)}
+      {:ok, fake_stream(owner, mode, model, ctx)}
     end
 
-    defp fake_stream(owner, :delayed, model) do
+    defp fake_stream(owner, :delayed, model, _ctx) do
       Stream.resource(
         fn ->
           send(owner, {:fake_router_delaying, self()})
@@ -56,7 +56,7 @@ defmodule PadoWebWeb.SessionLiveTest do
       )
     end
 
-    defp fake_stream(owner, :thinking_then_text, model) do
+    defp fake_stream(owner, :thinking_then_text, model, _ctx) do
       Stream.resource(
         fn -> :thinking end,
         fn
@@ -97,7 +97,45 @@ defmodule PadoWebWeb.SessionLiveTest do
       )
     end
 
-    defp fake_stream(_owner, _mode, model) do
+    defp fake_stream(owner, :tool_call, model, ctx) do
+      if Enum.any?(ctx.messages, &match?(%ToolResult{}, &1)) do
+        [
+          {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+          {:done,
+           %{
+             message: %Assistant{
+               content: [{:text, "Tool finished"}],
+               provider: model.provider,
+               model: model.id
+             }
+           }}
+        ]
+      else
+        send(owner, :fake_router_tool_call_requested)
+
+        [
+          {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+          {:done,
+           %{
+             message: %Assistant{
+               content: [
+                 {:tool_call,
+                  %{
+                    id: "call-bash",
+                    name: "bash",
+                    args: %{"command" => "sleep 1; printf tool-done"}
+                  }}
+               ],
+               provider: model.provider,
+               model: model.id,
+               stop_reason: :tool_use
+             }
+           }}
+        ]
+      end
+    end
+
+    defp fake_stream(_owner, _mode, model, _ctx) do
       [
         {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
         {:done,
@@ -549,6 +587,29 @@ defmodule PadoWebWeb.SessionLiveTest do
 
     assert eventually(fn ->
              render(view) =~ "Hello visible text"
+           end)
+  end
+
+  test "tool execution start renders a running tool", %{conn: conn, store: store} do
+    Application.put_env(:pado_web, :session_live_test_router_mode, :tool_call)
+
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Run a tool"})
+    |> render_submit()
+
+    assert_receive :fake_router_tool_call_requested, 1_000
+
+    assert eventually(fn ->
+             html = render(view)
+
+             html =~ ~s(data-tool-execution-start) and
+               html =~ ~s(id="session-running-tool-call-bash") and
+               html =~ "Running bash" and
+               html =~ "sleep 1; printf tool-done"
            end)
   end
 
