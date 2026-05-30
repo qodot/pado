@@ -135,6 +135,125 @@ defmodule PadoWebWeb.SessionLiveTest do
       end
     end
 
+    defp fake_stream(owner, :tool_call_then_stream, model, ctx) do
+      if Enum.any?(ctx.messages, &match?(%ToolResult{}, &1)) do
+        Stream.resource(
+          fn ->
+            send(owner, {:fake_router_tool_response_started, self()})
+            :streaming_tool_response
+          end,
+          fn
+            :streaming_tool_response ->
+              {[
+                 {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+                 {:text_delta, %{index: 0, delta: "Tool finished"}}
+               ], :done}
+
+            :done ->
+              receive do
+                :release_done ->
+                  {[
+                     {:done,
+                      %{
+                        message: %Assistant{
+                          content: [{:text, "Tool finished"}],
+                          provider: model.provider,
+                          model: model.id
+                        }
+                      }}
+                   ], :halt}
+              end
+
+            :halt ->
+              {:halt, :halt}
+          end,
+          fn _state -> :ok end
+        )
+      else
+        send(owner, :fake_router_tool_call_requested)
+
+        [
+          {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+          {:done,
+           %{
+             message: %Assistant{
+               content: [
+                 {:tool_call,
+                  %{
+                    id: "call-bash",
+                    name: "bash",
+                    args: %{"command" => "printf tool-done"}
+                  }}
+               ],
+               provider: model.provider,
+               model: model.id,
+               stop_reason: :tool_use
+             }
+           }}
+        ]
+      end
+    end
+
+    defp fake_stream(owner, :stream_then_tool_call, model, ctx) do
+      if Enum.any?(ctx.messages, &match?(%ToolResult{}, &1)) do
+        [
+          {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+          {:done,
+           %{
+             message: %Assistant{
+               content: [{:text, "Final response"}],
+               provider: model.provider,
+               model: model.id
+             }
+           }}
+        ]
+      else
+        Stream.resource(
+          fn ->
+            send(owner, {:fake_router_response_started, self()})
+            :streaming_response
+          end,
+          fn
+            :streaming_response ->
+              {[
+                 {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
+                 {:text_delta, %{index: 0, delta: "Starting response"}}
+               ], :tool_call}
+
+            :tool_call ->
+              receive do
+                :release_tool_call ->
+                  send(owner, :fake_router_tool_call_requested)
+
+                  {[
+                     {:done,
+                      %{
+                        message: %Assistant{
+                          content: [
+                            {:text, "Starting response"},
+                            {:tool_call,
+                             %{
+                               id: "call-bash",
+                               name: "bash",
+                               args: %{"command" => "sleep 1; printf tool-done"}
+                             }}
+                          ],
+                          provider: model.provider,
+                          model: model.id,
+                          stop_reason: :tool_use
+                        }
+                      }}
+                   ], :halt}
+              end
+
+            :halt ->
+              {:halt, :halt}
+          end,
+          fn _state -> :ok end
+        )
+      end
+    end
+
     defp fake_stream(_owner, _mode, model, _ctx) do
       [
         {:start, %{message: %Assistant{provider: model.provider, model: model.id}}},
@@ -628,6 +747,96 @@ defmodule PadoWebWeb.SessionLiveTest do
                html =~ ~s(id="session-running-tool-call-bash") and
                html =~ "Tool call" and
                html =~ "sleep 1; printf tool-done"
+           end)
+
+    assert eventually(
+             fn ->
+               html = render(view)
+
+               html =~ "Tool finished" and
+                 html =~ ~s(data-tool-execution-start) and
+                 html =~ ~s(id="session-entry-tool-call-bash") and
+                 html =~ ~s(data-tool-execution-result) and
+                 html =~ "Tool call" and
+                 html =~ "tool-done" and
+                 html =~ "sleep 1; printf tool-done"
+             end,
+             60
+           )
+  end
+
+  test "streaming items keep start order when tool starts before response", %{
+    conn: conn,
+    store: store
+  } do
+    Application.put_env(:pado_web, :session_live_test_router_mode, :tool_call_then_stream)
+
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Run a tool"})
+    |> render_submit()
+
+    assert_receive :fake_router_tool_call_requested, 1_000
+    assert_receive {:fake_router_tool_response_started, router_pid}, 1_000
+
+    assert eventually(fn ->
+             html = render(view)
+
+             with {tool_index, _length} <-
+                    :binary.match(html, ~s(id="session-running-tool-call-bash")),
+                  {stream_index, _length} <-
+                    :binary.match(html, ~s(id="session-streaming-entry-session-a")) do
+               tool_index < stream_index and
+                 html =~ "Tool call" and
+                 html =~ "Tool finished"
+             else
+               :nomatch -> false
+             end
+           end)
+
+    send(router_pid, :release_done)
+  end
+
+  test "streaming items keep start order when response starts before tool", %{
+    conn: conn,
+    store: store
+  } do
+    Application.put_env(:pado_web, :session_live_test_router_mode, :stream_then_tool_call)
+
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Answer then tool"})
+    |> render_submit()
+
+    assert_receive {:fake_router_response_started, router_pid}, 1_000
+
+    assert eventually(fn ->
+             render(view) =~ "Starting response"
+           end)
+
+    send(router_pid, :release_tool_call)
+    assert_receive :fake_router_tool_call_requested, 1_000
+
+    assert eventually(fn ->
+             html = render(view)
+
+             with {stream_index, _length} <-
+                    :binary.match(html, ~s(id="session-streaming-entry-session-a")),
+                  {tool_index, _length} <-
+                    :binary.match(html, ~s(id="session-running-tool-call-bash")) do
+               stream_index < tool_index and
+                 html =~ "Starting response" and
+                 html =~ "Tool call" and
+                 html =~ "sleep 1; printf tool-done"
+             else
+               :nomatch -> false
+             end
            end)
   end
 

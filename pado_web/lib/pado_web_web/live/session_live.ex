@@ -25,6 +25,7 @@ defmodule PadoWebWeb.SessionLive do
         message: "",
         streaming_response: nil,
         streaming_tools: [],
+        streaming_order: [],
         running_session_id: nil,
         sessions: [],
         sessions_error: nil,
@@ -136,17 +137,19 @@ defmodule PadoWebWeb.SessionLive do
             >
               <div class="flex flex-col gap-4">
                 <.session_entries entries={@selected_session.entries} />
-                <.session_streaming_entry
-                  :if={@streaming_response}
-                  id={streaming_entry_id(@selected_id)}
-                  text={@streaming_response.text}
-                  thinking={@streaming_response.thinking}
-                />
-                <.session_running_tool
-                  :for={tool <- @streaming_tools}
-                  id={running_tool_id(tool.id)}
-                  tool={tool}
-                />
+                <%= for item <- streaming_items(@streaming_order, @streaming_response, @streaming_tools) do %>
+                  <.session_running_tool
+                    :if={item.kind == :tool}
+                    id={running_tool_id(item.tool.id)}
+                    tool={item.tool}
+                  />
+                  <.session_streaming_entry
+                    :if={item.kind == :response}
+                    id={streaming_entry_id(@selected_id)}
+                    text={item.response.text}
+                    thinking={item.response.thinking}
+                  />
+                <% end %>
               </div>
             </div>
 
@@ -301,8 +304,9 @@ defmodule PadoWebWeb.SessionLive do
         socket
         |> assign(:selected_session, session)
         |> assign(:message, "")
-        |> assign(:streaming_response, empty_streaming_response())
+        |> assign(:streaming_response, nil)
         |> assign(:streaming_tools, [])
+        |> assign(:streaming_order, [])
         |> assign(:running_session_id, session.id)
         |> assign_sessions()
         |> push_event("clear-chat-composer", %{id: chat_composer_id(session.id)})
@@ -402,19 +406,28 @@ defmodule PadoWebWeb.SessionLive do
       |> Enum.reject(&(&1.id == tool.id))
       |> Kernel.++([tool])
 
-    assign(socket, :streaming_tools, streaming_tools)
+    socket
+    |> assign(:streaming_tools, streaming_tools)
+    |> append_streaming_order({:tool, tool.id})
   end
 
   defp append_streaming_delta(socket, field, delta) do
     response = socket.assigns.streaming_response || empty_streaming_response()
 
-    assign(socket, :streaming_response, Map.update!(response, field, &(&1 <> delta)))
+    socket
+    |> assign(:streaming_response, Map.update!(response, field, &(&1 <> delta)))
+    |> append_streaming_order(:response)
   end
 
   defp finish_agent_stream(socket, session_id, data) do
     socket =
       if socket.assigns.running_session_id == session_id do
-        assign(socket, running_session_id: nil, streaming_response: nil, streaming_tools: [])
+        assign(socket,
+          running_session_id: nil,
+          streaming_response: nil,
+          streaming_tools: [],
+          streaming_order: []
+        )
       else
         socket
       end
@@ -448,7 +461,7 @@ defmodule PadoWebWeb.SessionLive do
     if socket.assigns[:running_session_id] == selected_id do
       socket
     else
-      assign(socket, :streaming_response, nil)
+      assign(socket, streaming_response: nil, streaming_order: [])
     end
   end
 
@@ -456,8 +469,29 @@ defmodule PadoWebWeb.SessionLive do
     if socket.assigns[:running_session_id] == selected_id do
       socket
     else
-      assign(socket, :streaming_tools, [])
+      assign(socket, streaming_tools: [], streaming_order: [])
     end
+  end
+
+  defp append_streaming_order(socket, item) do
+    update(socket, :streaming_order, fn order ->
+      if item in order, do: order, else: order ++ [item]
+    end)
+  end
+
+  defp streaming_items(order, response, tools) do
+    tools_by_id = Map.new(tools, &{&1.id, &1})
+
+    Enum.flat_map(order, fn
+      :response ->
+        if response, do: [%{kind: :response, response: response}], else: []
+
+      {:tool, id} ->
+        case Map.fetch(tools_by_id, id) do
+          {:ok, tool} -> [%{kind: :tool, tool: tool}]
+          :error -> []
+        end
+    end)
   end
 
   defp empty_streaming_response do
