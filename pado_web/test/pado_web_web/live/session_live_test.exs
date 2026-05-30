@@ -324,9 +324,9 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ ~s(id="session-entry-list")
     assert response =~ ~s(phx-hook="SessionScroll")
     assert response =~ "rounded-lg"
+    assert response =~ ~s(data-markdown)
     refute response =~ "chat-bubble"
     refute response =~ "Assistant"
-    refute response =~ ~r/<p[^>]*>\s+Hello from assistant/
   end
 
   test "GET /sessions/:id renders assistant errors as errors", %{conn: conn, store: store} do
@@ -353,6 +353,48 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ "alert-error"
     assert response =~ ~s(data-content-kind="error")
     refute response =~ "No text content."
+  end
+
+  test "GET /sessions/:id renders assistant markdown safely", %{conn: conn, store: store} do
+    session =
+      "session-a"
+      |> Session.new()
+      |> append_messages([
+        %Assistant{
+          content: [
+            {:text,
+             """
+             **Bold answer**
+
+             - first
+             - second
+
+             ```elixir
+             IO.puts("hello")
+             ```
+
+             <script>alert("bad")</script>
+             [bad](javascript:alert("bad"))
+             """}
+          ]
+        }
+      ])
+
+    :ok = Store.save(store, session)
+
+    conn = get(conn, ~p"/sessions/session-a")
+
+    response = html_response(conn, 200)
+    assert response =~ ~s(data-markdown)
+    assert response =~ "<strong>Bold answer</strong>"
+    assert response =~ "<ul>"
+    assert response =~ ~r/<li>\s*first\s*<\/li>/
+    assert response =~ ~r/<li>\s*second\s*<\/li>/
+    assert response =~ "<pre><code"
+    assert response =~ "IO.puts"
+    refute response =~ "**Bold answer**"
+    refute response =~ "<script>alert"
+    refute response =~ "javascript:"
   end
 
   test "GET /sessions/:id renders the chat composer", %{conn: conn, store: store} do

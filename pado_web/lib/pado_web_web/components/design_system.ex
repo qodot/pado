@@ -61,14 +61,19 @@ defmodule PadoWebWeb.DesignSystem do
             </div>
           </div>
           <p
-            :if={part.kind != :error}
+            :if={part.kind == :thinking}
             class={[
               "whitespace-pre-wrap break-words text-sm leading-7",
-              part.kind == :thinking && "text-base-content/50",
-              part.kind == :text && "text-base-content"
+              "text-base-content/50"
             ]}
             phx-no-format
           >{part.text}</p>
+          <div
+            :if={part.kind == :text}
+            data-markdown
+            class="markdown-content break-words text-sm leading-7 text-base-content"
+            phx-no-format
+          >{markdown_html(part.text)}</div>
         </div>
       </div>
     </div>
@@ -90,14 +95,15 @@ defmodule PadoWebWeb.DesignSystem do
         ]}
         phx-no-format
       >{@thinking}</p>
-      <p
+      <div
         id={"#{@id}-text"}
         class={[
-          "whitespace-pre-wrap break-words text-sm leading-7 text-base-content",
+          "markdown-content break-words text-sm leading-7 text-base-content",
           @text == "" && "hidden"
         ]}
+        data-markdown
         phx-no-format
-      >{@text}</p>
+      >{markdown_html(@text)}</div>
       <div
         :if={@text == "" and @thinking == ""}
         class="loading loading-dots loading-sm text-base-content/50"
@@ -326,6 +332,15 @@ defmodule PadoWebWeb.DesignSystem do
       "" -> "No text content."
       text -> text
     end
+  end
+
+  defp markdown_html(text) when is_binary(text) do
+    text
+    |> Earmark.as_html!(gfm: true, breaks: true)
+    |> HtmlSanitizeEx.markdown_html()
+    |> Phoenix.HTML.raw()
+  rescue
+    _error -> Phoenix.HTML.html_escape(text)
   end
 
   defp model_label(nil), do: "Model"
