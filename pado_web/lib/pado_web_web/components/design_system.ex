@@ -34,7 +34,24 @@ defmodule PadoWebWeb.DesignSystem do
     """
   end
 
+  attr :entries, :list, required: true
+
+  def session_entries(assigns) do
+    assigns =
+      assign(assigns, :tool_results_by_call_id, tool_results_by_call_id(assigns.entries))
+
+    ~H"""
+    <.session_entry
+      :for={entry <- @entries}
+      :if={!grouped_tool_result?(@tool_results_by_call_id, entry)}
+      entry={entry}
+      tool_results_by_call_id={@tool_results_by_call_id}
+    />
+    """
+  end
+
   attr :entry, Entry, required: true
+  attr :tool_results_by_call_id, :map, default: %{}
 
   def session_entry(assigns) do
     ~H"""
@@ -74,6 +91,12 @@ defmodule PadoWebWeb.DesignSystem do
             class="markdown-content break-words text-sm leading-7 text-base-content"
             phx-no-format
           >{markdown_html(part.text)}</div>
+          <.session_running_tool
+            :if={part.kind == :tool_call}
+            id={tool_call_entry_id(part.tool.id)}
+            tool={part.tool}
+            result={Map.get(@tool_results_by_call_id, part.tool.id)}
+          />
         </div>
       </div>
     </div>
@@ -114,19 +137,39 @@ defmodule PadoWebWeb.DesignSystem do
 
   attr :id, :string, required: true
   attr :tool, :map, required: true
+  attr :result, :any, default: nil
 
   def session_running_tool(assigns) do
     ~H"""
-    <div id={@id} data-tool-execution-start class="py-2">
-      <div class="inline-flex max-w-full items-center gap-2 rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/70">
-        <span class="loading loading-spinner loading-xs shrink-0 text-primary" />
-        <span class="shrink-0 font-medium text-base-content">Running {@tool.name}</span>
-        <code
-          :if={tool_args_summary(@tool.args) != ""}
-          class="min-w-0 truncate rounded bg-base-300 px-1.5 py-0.5 text-xs text-base-content/70"
+    <div id={@id} data-tool-execution-start class="w-full py-2">
+      <div class="flex w-full flex-col rounded-lg bg-base-200 text-sm text-base-content/70">
+        <div class="flex w-full items-center gap-2 px-3 py-2">
+          <.icon name="hero-wrench-screwdriver" class="size-4 shrink-0 text-primary" />
+          <span class="shrink-0 font-medium text-base-content">Tool call</span>
+          <span class="badge badge-neutral badge-sm shrink-0">{@tool.name}</span>
+          <code
+            :if={tool_args_summary(@tool.args) != ""}
+            class="min-w-0 truncate rounded bg-base-300 px-1.5 py-0.5 text-xs text-base-content/70"
+          >
+            {tool_args_summary(@tool.args)}
+          </code>
+        </div>
+        <details
+          :if={@result}
+          data-tool-execution-result
+          class="group border-t border-base-300"
         >
-          {tool_args_summary(@tool.args)}
-        </code>
+          <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-base-content/55 select-none">
+            <.icon
+              name="hero-chevron-right"
+              class="size-3 shrink-0 transition-transform group-open:rotate-90"
+            />
+            <span>Result</span>
+          </summary>
+          <div class="markdown-content break-words px-3 pb-3 text-sm leading-7 text-base-content/80">
+            {markdown_html(message_text(@result))}
+          </div>
+        </details>
       </div>
     </div>
     """
@@ -303,14 +346,56 @@ defmodule PadoWebWeb.DesignSystem do
     [%{kind: :text, text: entry_text(entry)}]
   end
 
+  defp tool_results_by_call_id(entries) do
+    tool_call_ids =
+      entries
+      |> Enum.flat_map(&entry_tool_call_ids/1)
+      |> MapSet.new()
+
+    Enum.reduce(entries, %{}, fn
+      %Entry{kind: :tool_result, payload: %ToolResult{tool_call_id: id} = result}, acc
+      when is_binary(id) ->
+        if MapSet.member?(tool_call_ids, id), do: Map.put_new(acc, id, result), else: acc
+
+      _entry, acc ->
+        acc
+    end)
+  end
+
+  defp entry_tool_call_ids(%Entry{payload: %Assistant{content: content}}) when is_list(content) do
+    Enum.flat_map(content, fn
+      {:tool_call, %{id: id}} when is_binary(id) -> [id]
+      _part -> []
+    end)
+  end
+
+  defp entry_tool_call_ids(%Entry{}), do: []
+
+  defp grouped_tool_result?(tool_results_by_call_id, %Entry{
+         kind: :tool_result,
+         payload: %ToolResult{tool_call_id: id}
+       }) do
+    Map.has_key?(tool_results_by_call_id, id)
+  end
+
+  defp grouped_tool_result?(_tool_results_by_call_id, %Entry{}), do: false
+
   defp content_parts(parts, opts \\ [])
 
   defp content_parts(parts, opts) when is_list(parts) do
     parts
     |> Enum.flat_map(fn
-      {:thinking, text} when is_binary(text) and text != "" -> [%{kind: :thinking, text: text}]
-      {:text, text} when is_binary(text) and text != "" -> [%{kind: :text, text: text}]
-      _part -> []
+      {:thinking, text} when is_binary(text) and text != "" ->
+        [%{kind: :thinking, text: text}]
+
+      {:text, text} when is_binary(text) and text != "" ->
+        [%{kind: :text, text: text}]
+
+      {:tool_call, %{id: id, name: name, args: args}} ->
+        [%{kind: :tool_call, tool: %{id: id, name: name, args: args || %{}}}]
+
+      _part ->
+        []
     end)
     |> case do
       [] -> content_fallback(opts)
@@ -359,6 +444,8 @@ defmodule PadoWebWeb.DesignSystem do
   end
 
   defp tool_args_summary(_args), do: ""
+
+  defp tool_call_entry_id(tool_call_id), do: "session-entry-tool-#{tool_call_id}"
 
   defp markdown_html(text) when is_binary(text) do
     text

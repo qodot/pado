@@ -5,7 +5,7 @@ defmodule PadoWebWeb.SessionLiveTest do
   alias Pado.Agent.Session.Store
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message
-  alias Pado.LLM.Message.{Assistant, User}
+  alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   import Phoenix.LiveViewTest
 
@@ -342,9 +342,16 @@ defmodule PadoWebWeb.SessionLiveTest do
         %Assistant{
           content: [
             {:thinking, "Stored thinking"},
-            {:text, "Hello from assistant"}
+            {:text, "Hello from assistant"},
+            {:tool_call,
+             %{
+               id: "call-bash",
+               name: "bash",
+               args: %{"command" => "pwd"}
+             }}
           ]
-        }
+        },
+        ToolResult.text("call-bash", "bash", "tool output")
       ])
 
     :ok = Store.save(store, session)
@@ -359,6 +366,17 @@ defmodule PadoWebWeb.SessionLiveTest do
     assert response =~ ~s(data-entry-kind="assistant")
     assert response =~ ~s(data-content-kind="thinking")
     assert response =~ ~s(data-content-kind="text")
+    assert response =~ ~s(data-content-kind="tool_call")
+    assert response =~ ~s(data-tool-execution-start)
+    assert response =~ ~s(id="session-entry-tool-call-bash")
+    assert response =~ ~s(data-tool-execution-result)
+    assert response =~ ~r/<details[^>]+data-tool-execution-result/
+    refute response =~ ~r/<details[^>]+data-tool-execution-result[^>]+open/
+    assert response =~ "Result"
+    assert response =~ "Tool call"
+    assert response =~ "pwd"
+    assert response =~ "tool output"
+    refute response =~ ~s(data-entry-kind="tool_result")
     assert response =~ ~s(id="session-entry-list")
     assert response =~ ~s(phx-hook="SessionScroll")
     assert response =~ "rounded-lg"
@@ -608,7 +626,7 @@ defmodule PadoWebWeb.SessionLiveTest do
 
              html =~ ~s(data-tool-execution-start) and
                html =~ ~s(id="session-running-tool-call-bash") and
-               html =~ "Running bash" and
+               html =~ "Tool call" and
                html =~ "sleep 1; printf tool-done"
            end)
   end
