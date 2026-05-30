@@ -19,6 +19,10 @@ defmodule PadoWebWeb.Endpoint do
     only: PadoWebWeb.static_paths(),
     raise_on_missing_only: code_reloading?
 
+  if Mix.env() == :dev do
+    plug Tidewave
+  end
+
   if code_reloading? do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
     plug Phoenix.LiveReloader
