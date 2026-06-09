@@ -1,5 +1,6 @@
 defmodule Pado.AgentConfig do
   @type provider :: :openai_codex
+  @type reasoning_effort :: :none | :low | :medium | :high | :xhigh
 
   @providers [:openai_codex]
 
@@ -26,7 +27,7 @@ defmodule Pado.AgentConfig do
     description: nil
   ]
 
-  @spec build(provider(), Credentials.t(), Model.t(), atom() | nil, keyword()) :: t()
+  @spec build(provider(), Credentials.t(), Model.t(), reasoning_effort() | nil, keyword()) :: t()
   def build(
         provider,
         %Credentials{} = credentials,

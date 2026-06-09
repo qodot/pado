@@ -10,40 +10,43 @@ defmodule Pado.Agent do
 
   @type t :: pid()
 
-  @spec spawn(AgentConfig.provider(), Credentials.t(), Model.t(), atom() | nil, keyword()) ::
-          {:ok, pid()}
+  @spec spawn(
+          AgentConfig.provider(),
+          Credentials.t(),
+          Model.t(),
+          AgentConfig.reasoning_effort() | nil,
+          Store.t(),
+          keyword()
+        ) :: {:ok, pid()}
   def spawn(
         provider,
         %Credentials{} = credentials,
         %Model{} = model,
         reasoning_effort,
-        opts \\ []
+        session_store,
+        config_opts \\ []
       ) do
-    config = AgentConfig.build(provider, credentials, model, reasoning_effort, opts)
-    GenServer.start(__MODULE__, {config, opts})
+    config = AgentConfig.build(provider, credentials, model, reasoning_effort, config_opts)
+    GenServer.start(__MODULE__, {config, session_store})
   end
 
-  @spec start(pid(), User.t() | String.t(), keyword()) :: :ok | {:error, term()}
-  def start(agent, input, opts \\ [])
+  @spec start(pid(), String.t(), User.t() | String.t(), keyword()) :: :ok | {:error, term()}
+  def start(agent, session_id, input, opts \\ [])
 
-  def start(agent, %User{} = user, opts) when is_pid(agent) and is_list(opts) do
-    GenServer.call(agent, {:start_session_job, user, opts, callers()})
+  def start(agent, session_id, %User{} = user, opts)
+      when is_pid(agent) and is_binary(session_id) and is_list(opts) do
+    GenServer.call(agent, {:start_session_job, session_id, user, opts, callers()})
   end
 
-  def start(agent, content, opts) when is_pid(agent) and is_binary(content) and is_list(opts) do
-    start(agent, User.new(content), opts)
+  def start(agent, session_id, content, opts)
+      when is_pid(agent) and is_binary(session_id) and is_binary(content) and is_list(opts) do
+    start(agent, session_id, User.new(content), opts)
   end
 
   @impl true
-  def init(%AgentConfig{} = config), do: init({config, []})
-
-  def init({%AgentConfig{} = config, opts}) when is_list(opts) do
-    session = Keyword.get(opts, :session)
-    session_store = Keyword.get(opts, :store)
-
+  def init({%AgentConfig{} = config, session_store}) do
     state = %{
       config: config,
-      session: session,
       session_store: session_store,
       job: nil,
       callers: nil,
@@ -52,35 +55,26 @@ defmodule Pado.Agent do
       job_worker_monitor: nil
     }
 
-    case save_initial_session(session, session_store) do
-      :ok -> {:ok, state}
-      {:error, reason} -> {:stop, reason}
-    end
+    {:ok, state}
   end
 
   @impl true
   def handle_call(
-        {:start_session_job, %User{} = user, opts, callers},
+        {:start_session_job, session_id, %User{} = user, opts, callers},
         _from,
-        %{job: nil, session: %Session{} = session} = state
+        %{job: nil, session_store: store} = state
       ) do
-    {session, entries} = Session.append_messages(session, [user])
-
-    case persist_session_entries(state, entries) do
-      :ok ->
-        job = build_job(session, opts)
-        {:reply, :ok, start_job(%{state | session: session}, job, callers)}
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
+    with {:ok, session} <- Store.load(store, session_id),
+         {session, entries} = Session.append_messages(session, [user]),
+         :ok <- persist_session_entries(store, session.id, entries) do
+      job = build_job(session, opts)
+      {:reply, :ok, start_job(state, job, callers)}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call({:start_session_job, %User{}, _opts, _callers}, _from, %{job: nil} = state) do
-    {:reply, {:error, :missing_session}, state}
-  end
-
-  def handle_call({:start_session_job, %User{}, _opts, _callers}, _from, state) do
+  def handle_call({:start_session_job, _session_id, %User{}, _opts, _callers}, _from, state) do
     {:reply, {:error, :already_started}, state}
   end
 
@@ -150,7 +144,7 @@ defmodule Pado.Agent do
 
   def handle_info({:receive_job_event, {:job_end, %{job: job} = data}}, state) do
     Process.demonitor(state.job_worker_monitor, [:flush])
-    data = maybe_put_session(data, state.session)
+    data = put_final_session(data, state.session_store, job.session_id)
 
     state = %{
       state
@@ -241,43 +235,45 @@ defmodule Pado.Agent do
     }
   end
 
-  defp append_turn_to_session(%{session: nil} = state, _turn, event), do: {state, event}
+  defp append_turn_to_session(
+         %{job: %Job{session_id: session_id}, session_store: store} = state,
+         %Turn{} = turn,
+         event
+       ) do
+    case Store.load(store, session_id) do
+      {:ok, session} ->
+        messages = Turn.as_llm_messages(turn)
+        {_session, entries} = Session.append_messages(session, messages)
 
-  defp append_turn_to_session(%{session: %Session{} = session} = state, %Turn{} = turn, event) do
-    messages = Turn.as_llm_messages(turn)
-    {session, entries} = Session.append_messages(session, messages)
+        case persist_session_entries(store, session_id, entries) do
+          :ok ->
+            {%{state | job: append_turn(state.job, turn)}, event}
 
-    case persist_session_entries(state, entries) do
-      :ok ->
-        {%{state | session: session, job: append_turn(state.job, turn)}, event}
+          {:error, reason} ->
+            event = put_in(event, [Access.elem(1), :session_persist_error], reason)
+            {%{state | job: append_turn(state.job, turn)}, event}
+        end
 
       {:error, reason} ->
         event = put_in(event, [Access.elem(1), :session_persist_error], reason)
-        {%{state | session: session, job: append_turn(state.job, turn)}, event}
+        {%{state | job: append_turn(state.job, turn)}, event}
     end
   end
 
   defp append_turn(%Job{} = job, %Turn{} = turn), do: %{job | turns: job.turns ++ [turn]}
   defp append_turn(job, _turn), do: job
 
-  defp maybe_put_session(data, nil), do: data
-  defp maybe_put_session(data, %Session{} = session), do: Map.put(data, :session, session)
-
-  defp persist_session_entries(%{session_store: nil}, _entries), do: :ok
-  defp persist_session_entries(_state, []), do: :ok
-
-  defp persist_session_entries(
-         %{session: %Session{id: session_id}, session_store: store},
-         entries
-       ) do
-    Store.append(store, session_id, entries)
+  defp put_final_session(data, store, session_id) do
+    case Store.load(store, session_id) do
+      {:ok, session} -> Map.put(data, :session, session)
+      {:error, _reason} -> data
+    end
   end
 
-  defp save_initial_session(nil, _store), do: :ok
-  defp save_initial_session(_session, nil), do: :ok
+  defp persist_session_entries(_store, _session_id, []), do: :ok
 
-  defp save_initial_session(%Session{} = session, store) do
-    Store.save(store, session)
+  defp persist_session_entries(store, session_id, entries) do
+    Store.append(store, session_id, entries)
   end
 
   defp sanitize_tool_event({:tool_execution_start, data}) do

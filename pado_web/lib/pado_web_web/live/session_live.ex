@@ -293,14 +293,17 @@ defmodule PadoWebWeb.SessionLive do
          {:ok, model} <- session_model(session),
          {:ok, credentials} <- Credential.load(model.provider),
          {:ok, agent} <-
-           PadoAgent.spawn(model.provider, credentials, model, session.reasoning_effort,
-             router: llm_router(),
-             session: session,
-             store: session_store()
+           PadoAgent.spawn(
+             model.provider,
+             credentials,
+             model,
+             session.reasoning_effort,
+             session_store(),
+             router: llm_router()
            ),
          :ok <- start_agent_stream(agent, session.id, self()),
          :ok <- wait_until_subscriber_count(agent, 1),
-         :ok <- PadoAgent.start(agent, message),
+         :ok <- PadoAgent.start(agent, session.id, message),
          {:ok, session} <- Store.load(session_store(), session.id) do
       socket =
         socket

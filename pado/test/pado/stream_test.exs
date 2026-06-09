@@ -60,6 +60,22 @@ defmodule Pado.StreamTest do
   alias Pado.LLM.Message.Assistant
   alias Pado.LLM.Tool, as: LLMTool
 
+  defmodule Store do
+    @behaviour Pado.Agent.Session.Store
+
+    def list(_opts), do: {:ok, []}
+
+    def load(session_id, opts) do
+      case Keyword.get(opts, :session) do
+        %Session{id: ^session_id} = session -> {:ok, session}
+        _other -> {:error, :not_found}
+      end
+    end
+
+    def save(_session, _opts), do: :ok
+    def append(_session_id, _entries, _opts), do: :ok
+  end
+
   setup tags do
     if tags[:fake_llm] do
       test_pid = self()
@@ -496,14 +512,14 @@ defmodule Pado.StreamTest do
       config.llm.credentials,
       config.llm.model,
       Keyword.get(config.llm.opts, :reasoning_effort),
+      {Store, session: Session.new("s1")},
       router: config.llm.router,
-      tools: config.harness.tools,
-      session: Session.new("s1")
+      tools: config.harness.tools
     )
   end
 
   defp start_job(agent, start_opts) do
-    Agent.start(agent, "hi", start_opts)
+    Agent.start(agent, "s1", "hi", start_opts)
   end
 
   defp build_setup(opts) do

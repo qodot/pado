@@ -16,18 +16,66 @@ defmodule Pado.AgentTest do
   defmodule Store do
     @behaviour Pado.Agent.Session.Store
 
+    @table __MODULE__
+
+    def setup(owner, session) do
+      ensure_table()
+
+      if session do
+        :ets.insert(@table, {owner, session})
+      end
+
+      {__MODULE__, owner: owner}
+    end
+
     def list(_opts), do: {:ok, []}
 
-    def load(_session_id, _opts), do: {:error, :not_found}
+    def load(session_id, opts) do
+      owner = Keyword.fetch!(opts, :owner)
+
+      case :ets.lookup(@table, owner) do
+        [{^owner, %Session{id: ^session_id} = session}] -> {:ok, session}
+        _other -> {:error, :not_found}
+      end
+    end
 
     def save(session, opts) do
-      send(Keyword.fetch!(opts, :owner), {:store_save, session})
+      owner = Keyword.fetch!(opts, :owner)
+
+      :ets.insert(@table, {owner, session})
+      send(owner, {:store_save, session})
       :ok
     end
 
     def append(session_id, entries, opts) do
-      send(Keyword.fetch!(opts, :owner), {:store_append, session_id, entries})
+      owner = Keyword.fetch!(opts, :owner)
+
+      case :ets.lookup(@table, owner) do
+        [{^owner, %Session{id: ^session_id} = session}] ->
+          updated_at =
+            case List.last(entries) do
+              %Entry{timestamp: timestamp} -> timestamp
+              nil -> session.updated_at
+            end
+
+          session = %{session | entries: session.entries ++ entries, updated_at: updated_at}
+          :ets.insert(@table, {owner, session})
+
+        _other ->
+          :ok
+      end
+
+      send(owner, {:store_append, session_id, entries})
       :ok
+    end
+
+    defp ensure_table do
+      case :ets.whereis(@table) do
+        :undefined -> :ets.new(@table, [:named_table, :public])
+        _table -> :ok
+      end
+    rescue
+      ArgumentError -> :ok
     end
   end
 
@@ -42,21 +90,15 @@ defmodule Pado.AgentTest do
     :ok
   end
 
-  describe "spawn/5" do
+  describe "spawn/6" do
     test "AgentConfig.build/5와 같은 인수로 agent를 만든다" do
       credentials = Credentials.build(:openai_codex, "a", "r", 3600)
       model = %Model{id: "codex", provider: :openai_codex}
       session = Session.new("session-1", timestamp: now())
-      store = {Store, owner: self()}
+      store = Store.setup(self(), session)
 
       {:ok, agent} =
-        Agent.spawn(:openai_codex, credentials, model, :high,
-          router: Pado.Test.FakeLLM,
-          session: session,
-          store: store
-        )
-
-      assert_receive {:store_save, ^session}
+        Agent.spawn(:openai_codex, credentials, model, :high, store, router: Pado.Test.FakeLLM)
 
       assert %{
                config: %AgentConfig{
@@ -68,7 +110,6 @@ defmodule Pado.AgentTest do
                    opts: [reasoning_effort: :high]
                  }
                },
-               session: ^session,
                session_store: ^store
              } = :sys.get_state(agent)
     end
@@ -130,7 +171,11 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, %User{content: "next", timestamp: now()}, job_id: "job-1")
+
+      assert :ok =
+               Agent.start(agent, session.id, %User{content: "next", timestamp: now()},
+                 job_id: "job-1"
+               )
 
       assert_receive {:fake_router_called,
                       %{ctx: %Context{messages: [^previous, %User{content: "next"}]}}}
@@ -148,13 +193,13 @@ defmodule Pado.AgentTest do
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
-      {:ok, agent} = spawn_agent(session: session, store: {Store, owner: self()})
-      assert_receive {:store_save, ^session}
+      {:ok, agent} =
+        spawn_agent(session: session, store: Store.setup(self(), session))
 
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, "next", job_id: "job-1")
+      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -182,13 +227,17 @@ defmodule Pado.AgentTest do
 
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
-      {:ok, agent} = spawn_agent(tools: [tool], session: session, store: {Store, owner: self()})
-      assert_receive {:store_save, ^session}
+      {:ok, agent} =
+        spawn_agent(
+          tools: [tool],
+          session: session,
+          store: Store.setup(self(), session)
+        )
 
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, "next", job_id: "job-1")
+      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -229,7 +278,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, "next", job_id: "job-1")
+      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
 
       events = Task.await(collector, 500)
 
@@ -237,10 +286,10 @@ defmodule Pado.AgentTest do
       assert {:job_end, %{session: %Session{}}} = List.last(events)
     end
 
-    test "세션 없이 메시지로 시작하면 에러를 반환한다" do
+    test "없는 세션 id로 시작하면 에러를 반환한다" do
       {:ok, agent} = spawn_agent()
 
-      assert {:error, :missing_session} = Agent.start(agent, "next")
+      assert {:error, :not_found} = Agent.start(agent, "missing-session", "next")
 
       Process.exit(agent, :kill)
     end
@@ -267,7 +316,11 @@ defmodule Pado.AgentTest do
       Keyword.get(opts, :credentials, Credentials.build(:openai_codex, "a", "r", 3600)),
       Keyword.get(opts, :model, %Model{id: "test", provider: :openai_codex}),
       Keyword.get(opts, :reasoning_effort),
-      Keyword.put_new(opts, :router, Pado.Test.FakeLLM)
+      Keyword.get(opts, :store, Store.setup(self(), Keyword.get(opts, :session))),
+      opts
+      |> Keyword.delete(:session)
+      |> Keyword.delete(:store)
+      |> Keyword.put_new(:router, Pado.Test.FakeLLM)
     )
   end
 

@@ -287,10 +287,9 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
           current_agent.llm.credentials,
           current_agent.llm.model,
           Keyword.get(current_agent.llm.opts, :reasoning_effort),
+          store,
           router: current_agent.llm.router,
-          tools: current_agent.harness.tools,
-          session: session,
-          store: store
+          tools: current_agent.harness.tools
         )
 
       collector =
@@ -345,7 +344,10 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
         end)
 
       :ok = wait_until_subscriber_count.(agent_pid, 1)
-      :ok = Pado.Agent.start(agent_pid, text, job_id: "job-#{System.unique_integer([:positive])}")
+      :ok =
+        Pado.Agent.start(agent_pid, session.id, text,
+          job_id: "job-#{System.unique_integer([:positive])}"
+        )
       Elixir.Agent.update(running_agent_pid, fn _ -> agent_pid end)
 
       Task.await(collector, :infinity)
