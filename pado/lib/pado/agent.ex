@@ -32,7 +32,7 @@ defmodule Pado.Agent do
 
   @spec run(pid(), String.t(), String.t()) :: :ok | {:error, term()}
   def run(agent, session_id, user_message) do
-    GenServer.call(agent, {:run_session_job, session_id, User.new(user_message), callers()})
+    GenServer.call(agent, {:run_job, session_id, User.new(user_message), callers()})
   end
 
   @impl true
@@ -52,7 +52,7 @@ defmodule Pado.Agent do
 
   @impl true
   def handle_call(
-        {:run_session_job, session_id, %User{} = user, callers},
+        {:run_job, session_id, %User{} = user, callers},
         _from,
         %{job: nil, session_store: store} = state
       ) do
@@ -66,7 +66,7 @@ defmodule Pado.Agent do
     end
   end
 
-  def handle_call({:run_session_job, _session_id, %User{}, _callers}, _from, state) do
+  def handle_call({:run_job, _session_id, %User{}, _callers}, _from, state) do
     {:reply, {:error, :already_started}, state}
   end
 
