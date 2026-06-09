@@ -306,7 +306,6 @@ defmodule PadoWebWeb.DesignSystem do
 
   defp entry_kind(%Entry{kind: kind}), do: Atom.to_string(kind)
 
-  defp entry_label(%Entry{kind: :user}), do: "User"
   defp entry_label(%Entry{kind: :assistant}), do: nil
   defp entry_label(%Entry{kind: :tool_result, payload: %ToolResult{tool_name: name}}), do: name
   defp entry_label(%Entry{kind: :compaction_summary}), do: "Summary"
