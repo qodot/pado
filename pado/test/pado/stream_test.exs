@@ -246,16 +246,17 @@ defmodule Pado.StreamTest do
     test "1턴 응답 → :job_start로 시작, :job_end status :done" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       events = Task.await(collector, 500)
 
-      assert {:job_start, %{job_id: "j1"}} = hd(events)
+      assert {:job_start, %{job_id: job_id}} = hd(events)
+      assert is_binary(job_id)
       assert {:job_end, %{status: :done, reason: nil, turns: [_]}} = List.last(events)
     end
 
@@ -266,12 +267,12 @@ defmodule Pado.StreamTest do
       asst2 = %Assistant{content: [{:text, "final"}]}
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
-      {config, start_opts} = build_setup(tools: [tool])
+      config = build_setup(tools: [tool])
       {:ok, agent} = spawn_agent(config)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       events = Task.await(collector, 500)
 
@@ -281,20 +282,21 @@ defmodule Pado.StreamTest do
       assert {:job_end, %{status: :done, turns: [_, _]}} = List.last(events)
     end
 
-    test "max_turns 도달 시 :max_turns" do
+    test "기본 max_turns 도달 시 :max_turns" do
       tool = make_tool("echo", fn _, _ -> "r" end)
       asst = %Assistant{content: [{:tool_call, %{id: "c1", name: "echo", args: %{}}}]}
       Pado.Test.FakeLLM.put_response(ok_stream(asst))
 
-      {config, start_opts} = build_setup(max_turns: 1, tools: [tool])
+      config = build_setup(tools: [tool])
       {:ok, agent} = spawn_agent(config)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       events = Task.await(collector, 500)
-      assert {:job_end, %{status: :max_turns, turns: [_]}} = List.last(events)
+      assert {:job_end, %{status: :max_turns, turns: turns}} = List.last(events)
+      assert length(turns) == 10
     end
 
     test "LLM 응답이 :error로 끝나면 :job_end status :error에 reason 실림" do
@@ -309,12 +311,12 @@ defmodule Pado.StreamTest do
          ]}
       )
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       assert {:job_end, %{status: :error, reason: "boom"}} =
                collector |> Task.await(500) |> List.last()
@@ -325,7 +327,7 @@ defmodule Pado.StreamTest do
     @describetag :fake_llm
 
     test "여러 번 호출하면 각각 스트림을 반환한다" do
-      {config, _job} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
 
       assert stream1 = Pado.Stream.subscribe(agent)
@@ -339,10 +341,10 @@ defmodule Pado.StreamTest do
     test "이미 종료된 agent를 구독하면 에러 종료 이벤트 스트림을 반환한다" do
       Pado.Test.FakeLLM.put_response(ok_stream(%Assistant{content: [{:text, "ok"}]}))
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
 
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       stream = Pado.Stream.subscribe(agent)
       _ = Enum.to_list(stream)
@@ -358,10 +360,10 @@ defmodule Pado.StreamTest do
         gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
       )
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
 
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       subscriber1 =
         Task.async(fn ->
@@ -396,10 +398,10 @@ defmodule Pado.StreamTest do
         gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
       )
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
 
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
       live_subscriber =
         Task.async(fn ->
@@ -434,7 +436,7 @@ defmodule Pado.StreamTest do
         gated_ok_stream(self(), %Assistant{content: [{:text, "ok"}]})
       )
 
-      {config, start_opts} = build_setup([])
+      config = build_setup([])
       {:ok, agent} = spawn_agent(config)
       ref = Process.monitor(agent)
 
@@ -445,9 +447,10 @@ defmodule Pado.StreamTest do
         end)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      :ok = start_job(agent, start_opts)
+      :ok = start_job(agent)
 
-      assert [{:job_start, %{job_id: "j1"}}] = Task.await(subscriber, 500)
+      assert [{:job_start, %{job_id: job_id}}] = Task.await(subscriber, 500)
+      assert is_binary(job_id)
       assert_receive {:DOWN, ^ref, :process, ^agent, _}, 500
     end
   end
@@ -518,12 +521,12 @@ defmodule Pado.StreamTest do
     )
   end
 
-  defp start_job(agent, start_opts) do
-    Agent.run(agent, "s1", "hi", start_opts)
+  defp start_job(agent) do
+    Agent.run(agent, "s1", "hi")
   end
 
   defp build_setup(opts) do
-    config = %AgentConfig{
+    %AgentConfig{
       llm: %AgentConfig.LLM{
         provider: :openai_codex,
         credentials: Credentials.build(:openai_codex, "a", "r", 3600),
@@ -533,10 +536,6 @@ defmodule Pado.StreamTest do
         tools: Keyword.get(opts, :tools, [])
       }
     }
-
-    start_opts = [job_id: "j1", max_turns: Keyword.get(opts, :max_turns, 10)]
-
-    {config, start_opts}
   end
 
   defp make_tool(name, execute) do

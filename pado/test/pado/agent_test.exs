@@ -172,10 +172,7 @@ defmodule Pado.AgentTest do
 
       assert :ok = wait_until_subscriber_count(agent, 1)
 
-      assert :ok =
-               Agent.run(agent, session.id, %User{content: "next", timestamp: now()},
-                 job_id: "job-1"
-               )
+      assert :ok = Agent.run(agent, session.id, "next")
 
       assert_receive {:fake_router_called,
                       %{ctx: %Context{messages: [^previous, %User{content: "next"}]}}}
@@ -199,7 +196,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -237,7 +234,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -278,7 +275,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next")
 
       events = Task.await(collector, 500)
 

@@ -344,10 +344,7 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
         end)
 
       :ok = wait_until_subscriber_count.(agent_pid, 1)
-      :ok =
-        Pado.Agent.run(agent_pid, session.id, text,
-          job_id: "job-#{System.unique_integer([:positive])}"
-        )
+      :ok = Pado.Agent.run(agent_pid, session.id, text)
       Elixir.Agent.update(running_agent_pid, fn _ -> agent_pid end)
 
       Task.await(collector, :infinity)
