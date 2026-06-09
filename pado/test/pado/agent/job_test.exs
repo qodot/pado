@@ -1,8 +1,28 @@
 defmodule Pado.Agent.JobTest do
   use ExUnit.Case, async: true
 
-  alias Pado.Agent.{Job, Turn}
+  alias Pado.Agent.{Job, Session, Turn}
+  alias Pado.Agent.Session.Entry
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
+
+  describe "build/1" do
+    test "세션으로 실행 job을 만든다" do
+      user = User.new("hi")
+
+      session = %{
+        Session.new("s1", cwd: "/tmp/pado", timestamp: now())
+        | entries: [entry(:user, user, 0)]
+      }
+
+      assert %Job{
+               messages: [^user],
+               session_id: "s1",
+               cwd: "/tmp/pado",
+               job_id: "job-" <> _,
+               max_turns: 10
+             } = Job.build(session)
+    end
+  end
 
   describe "abort/3" do
     test "worker 프로세스를 종료하고 monitor DOWN 메시지를 flush한다" do
@@ -116,4 +136,16 @@ defmodule Pado.Agent.JobTest do
       max_turns: Keyword.get(opts, :max_turns, 10)
     }
   end
+
+  defp entry(kind, payload, seq) do
+    %Entry{
+      id: "entry-#{seq}",
+      seq: seq,
+      kind: kind,
+      payload: payload,
+      timestamp: now()
+    }
+  end
+
+  defp now, do: ~U[2026-05-17 12:00:00Z]
 end

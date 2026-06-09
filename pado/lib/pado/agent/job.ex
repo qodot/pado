@@ -1,4 +1,5 @@
 defmodule Pado.Agent.Job do
+  alias Pado.Agent.Session
   alias Pado.Agent.Turn
   alias Pado.AgentConfig
   alias Pado.LLM.Message, as: LLMMessage
@@ -23,6 +24,17 @@ defmodule Pado.Agent.Job do
     running_tools: %{},
     max_turns: 10
   ]
+
+  @spec build(Session.t()) :: t()
+  def build(%Session{} = session) do
+    %__MODULE__{
+      messages: Session.to_llm_messages(session),
+      session_id: session.id,
+      cwd: session.cwd,
+      job_id: new_job_id(),
+      max_turns: 10
+    }
+  end
 
   @spec llm_messages(t()) :: [LLMMessage.t()]
   def llm_messages(%__MODULE__{} = job) do
@@ -99,4 +111,8 @@ defmodule Pado.Agent.Job do
 
   defp has_tool_calls?(nil), do: false
   defp has_tool_calls?(%Turn{assistant: assistant}), do: Turn.tool_calls(assistant) != []
+
+  defp new_job_id do
+    "job-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
+  end
 end

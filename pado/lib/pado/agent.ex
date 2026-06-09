@@ -59,7 +59,7 @@ defmodule Pado.Agent do
     with {:ok, session} <- Store.load(store, session_id),
          {session, _entries} = Session.append_messages(session, [user]),
          :ok <- Store.save(store, session) do
-      job = build_job(session)
+      job = Job.build(session)
       {:reply, :ok, start_job(state, job, callers)}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -217,16 +217,6 @@ defmodule Pado.Agent do
     }
   end
 
-  defp build_job(%Session{} = session) do
-    %Job{
-      messages: Session.to_llm_messages(session),
-      session_id: session.id,
-      cwd: session.cwd,
-      job_id: new_job_id(),
-      max_turns: 10
-    }
-  end
-
   defp append_turn_to_session(
          %{job: %Job{session_id: session_id}, session_store: store} = state,
          %Turn{} = turn,
@@ -269,10 +259,6 @@ defmodule Pado.Agent do
 
   defp callers do
     [self() | Process.get(:"$callers", [])]
-  end
-
-  defp new_job_id do
-    "job-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
   end
 
   defp notify(%{subscribers: subscribers}, event) do
