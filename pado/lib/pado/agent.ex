@@ -30,17 +30,17 @@ defmodule Pado.Agent do
     GenServer.start(__MODULE__, {config, session_store})
   end
 
-  @spec start(pid(), String.t(), User.t() | String.t(), keyword()) :: :ok | {:error, term()}
-  def start(agent, session_id, input, opts \\ [])
+  @spec run(pid(), String.t(), User.t() | String.t(), keyword()) :: :ok | {:error, term()}
+  def run(agent, session_id, input, opts \\ [])
 
-  def start(agent, session_id, %User{} = user, opts)
+  def run(agent, session_id, %User{} = user, opts)
       when is_pid(agent) and is_binary(session_id) and is_list(opts) do
-    GenServer.call(agent, {:start_session_job, session_id, user, opts, callers()})
+    GenServer.call(agent, {:run_session_job, session_id, user, opts, callers()})
   end
 
-  def start(agent, session_id, content, opts)
+  def run(agent, session_id, content, opts)
       when is_pid(agent) and is_binary(session_id) and is_binary(content) and is_list(opts) do
-    start(agent, session_id, User.new(content), opts)
+    run(agent, session_id, User.new(content), opts)
   end
 
   @impl true
@@ -60,7 +60,7 @@ defmodule Pado.Agent do
 
   @impl true
   def handle_call(
-        {:start_session_job, session_id, %User{} = user, opts, callers},
+        {:run_session_job, session_id, %User{} = user, opts, callers},
         _from,
         %{job: nil, session_store: store} = state
       ) do
@@ -74,7 +74,7 @@ defmodule Pado.Agent do
     end
   end
 
-  def handle_call({:start_session_job, _session_id, %User{}, _opts, _callers}, _from, state) do
+  def handle_call({:run_session_job, _session_id, %User{}, _opts, _callers}, _from, state) do
     {:reply, {:error, :already_started}, state}
   end
 

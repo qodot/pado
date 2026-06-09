@@ -173,7 +173,7 @@ defmodule Pado.AgentTest do
       assert :ok = wait_until_subscriber_count(agent, 1)
 
       assert :ok =
-               Agent.start(agent, session.id, %User{content: "next", timestamp: now()},
+               Agent.run(agent, session.id, %User{content: "next", timestamp: now()},
                  job_id: "job-1"
                )
 
@@ -199,7 +199,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -237,7 +237,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
 
       assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
 
@@ -278,7 +278,7 @@ defmodule Pado.AgentTest do
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
-      assert :ok = Agent.start(agent, session.id, "next", job_id: "job-1")
+      assert :ok = Agent.run(agent, session.id, "next", job_id: "job-1")
 
       events = Task.await(collector, 500)
 
@@ -289,7 +289,7 @@ defmodule Pado.AgentTest do
     test "없는 세션 id로 시작하면 에러를 반환한다" do
       {:ok, agent} = spawn_agent()
 
-      assert {:error, :not_found} = Agent.start(agent, "missing-session", "next")
+      assert {:error, :not_found} = Agent.run(agent, "missing-session", "next")
 
       Process.exit(agent, :kill)
     end

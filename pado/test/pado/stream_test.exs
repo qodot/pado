@@ -519,7 +519,7 @@ defmodule Pado.StreamTest do
   end
 
   defp start_job(agent, start_opts) do
-    Agent.start(agent, "s1", "hi", start_opts)
+    Agent.run(agent, "s1", "hi", start_opts)
   end
 
   defp build_setup(opts) do

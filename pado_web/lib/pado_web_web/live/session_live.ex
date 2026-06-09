@@ -303,7 +303,7 @@ defmodule PadoWebWeb.SessionLive do
            ),
          :ok <- start_agent_stream(agent, session.id, self()),
          :ok <- wait_until_subscriber_count(agent, 1),
-         :ok <- PadoAgent.start(agent, session.id, message),
+         :ok <- PadoAgent.run(agent, session.id, message),
          {:ok, session} <- Store.load(session_store(), session.id) do
       socket =
         socket
