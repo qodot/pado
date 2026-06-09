@@ -47,27 +47,7 @@ defmodule Pado.AgentTest do
       :ok
     end
 
-    def append(session_id, entries, opts) do
-      owner = Keyword.fetch!(opts, :owner)
-
-      case :ets.lookup(@table, owner) do
-        [{^owner, %Session{id: ^session_id} = session}] ->
-          updated_at =
-            case List.last(entries) do
-              %Entry{timestamp: timestamp} -> timestamp
-              nil -> session.updated_at
-            end
-
-          session = %{session | entries: session.entries ++ entries, updated_at: updated_at}
-          :ets.insert(@table, {owner, session})
-
-        _other ->
-          :ok
-      end
-
-      send(owner, {:store_append, session_id, entries})
-      :ok
-    end
+    def append(_session_id, _entries, _opts), do: :ok
 
     defp ensure_table do
       case :ets.whereis(@table) do
@@ -185,7 +165,7 @@ defmodule Pado.AgentTest do
       assert List.last(updated.entries).payload == assistant
     end
 
-    test "세션 store가 있으면 초기 세션을 저장하고 새 엔트리를 append한다" do
+    test "세션 store가 있으면 메시지를 추가한 세션을 저장한다" do
       session = Session.new("session-1", timestamp: now())
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
@@ -198,15 +178,17 @@ defmodule Pado.AgentTest do
       assert :ok = wait_until_subscriber_count(agent, 1)
       assert :ok = Agent.run(agent, session.id, "next")
 
-      assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
+      assert_receive {:store_save, %Session{entries: [%Entry{kind: :user}]}}
 
       events = Task.await(collector, 500)
 
-      assert_receive {:store_append, "session-1", [%Entry{kind: :assistant}]}
+      assert_receive {:store_save,
+                      %Session{entries: [%Entry{kind: :user}, %Entry{kind: :assistant}]}}
+
       assert {:job_end, %{session: %Session{}}} = List.last(events)
     end
 
-    test "tool turn마다 세션 store에 append한다" do
+    test "tool turn마다 세션 store에 저장한다" do
       tool = %Pado.AgentConfig.Tools.Tool{
         schema: Pado.LLM.Tool.new("echo", "d", %{}),
         async: fn _args, _ctx -> Task.async(fn -> "result" end) end,
@@ -236,18 +218,32 @@ defmodule Pado.AgentTest do
       assert :ok = wait_until_subscriber_count(agent, 1)
       assert :ok = Agent.run(agent, session.id, "next")
 
-      assert_receive {:store_append, "session-1", [%Entry{kind: :user}]}
+      assert_receive {:store_save, %Session{entries: [%Entry{kind: :user}]}}
 
-      assert_receive {:store_append, "session-1",
-                      [%Entry{kind: :assistant}, %Entry{kind: :tool_result}]}
+      assert_receive {:store_save,
+                      %Session{
+                        entries: [
+                          %Entry{kind: :user},
+                          %Entry{kind: :assistant},
+                          %Entry{kind: :tool_result}
+                        ]
+                      }}
 
-      assert_receive {:store_append, "session-1", [%Entry{kind: :assistant}]}
+      assert_receive {:store_save,
+                      %Session{
+                        entries: [
+                          %Entry{kind: :user},
+                          %Entry{kind: :assistant},
+                          %Entry{kind: :tool_result},
+                          %Entry{kind: :assistant}
+                        ]
+                      }}
 
       events = Task.await(collector, 500)
 
       assert {:job_end, %{session: %Session{} = updated, turns: [_, _]}} = List.last(events)
       assert Enum.map(updated.entries, & &1.kind) == [:user, :assistant, :tool_result, :assistant]
-      refute_receive {:store_append, "session-1", _}, 50
+      refute_receive {:store_save, %Session{}}, 50
     end
 
     test "세션 cwd를 tool context로 전달한다" do

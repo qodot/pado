@@ -57,8 +57,8 @@ defmodule Pado.Agent do
         %{job: nil, session_store: store} = state
       ) do
     with {:ok, session} <- Store.load(store, session_id),
-         {session, entries} = Session.append_messages(session, [user]),
-         :ok <- persist_session_entries(store, session.id, entries) do
+         {session, _entries} = Session.append_messages(session, [user]),
+         :ok <- Store.save(store, session) do
       job = build_job(session)
       {:reply, :ok, start_job(state, job, callers)}
     else
@@ -235,9 +235,9 @@ defmodule Pado.Agent do
     case Store.load(store, session_id) do
       {:ok, session} ->
         messages = Turn.as_llm_messages(turn)
-        {_session, entries} = Session.append_messages(session, messages)
+        {session, _entries} = Session.append_messages(session, messages)
 
-        case persist_session_entries(store, session_id, entries) do
+        case Store.save(store, session) do
           :ok ->
             {%{state | job: append_turn(state.job, turn)}, event}
 
@@ -260,12 +260,6 @@ defmodule Pado.Agent do
       {:ok, session} -> Map.put(data, :session, session)
       {:error, _reason} -> data
     end
-  end
-
-  defp persist_session_entries(_store, _session_id, []), do: :ok
-
-  defp persist_session_entries(store, session_id, entries) do
-    Store.append(store, session_id, entries)
   end
 
   defp sanitize_tool_event({:tool_execution_start, data}) do
