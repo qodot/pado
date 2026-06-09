@@ -6,7 +6,7 @@ defmodule Pado.AgentTest do
   alias Pado.Agent.Session
   alias Pado.Agent.Session.Entry
   alias Pado.AgentConfig
-  alias Pado.AgentConfig.{Harness, LLM}
+  alias Pado.AgentConfig.LLM
   alias Pado.LLM.Context
   alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.{Assistant, User}
@@ -42,9 +42,41 @@ defmodule Pado.AgentTest do
     :ok
   end
 
+  describe "spawn/5" do
+    test "AgentConfig.build/5와 같은 인수로 agent를 만든다" do
+      credentials = Credentials.build(:openai_codex, "a", "r", 3600)
+      model = %Model{id: "codex", provider: :openai_codex}
+      session = Session.new("session-1", timestamp: now())
+      store = {Store, owner: self()}
+
+      {:ok, agent} =
+        Agent.spawn(:openai_codex, credentials, model, :high,
+          router: Pado.Test.FakeLLM,
+          session: session,
+          store: store
+        )
+
+      assert_receive {:store_save, ^session}
+
+      assert %{
+               config: %AgentConfig{
+                 llm: %LLM{
+                   provider: :openai_codex,
+                   credentials: ^credentials,
+                   model: ^model,
+                   router: Pado.Test.FakeLLM,
+                   opts: [reasoning_effort: :high]
+                 }
+               },
+               session: ^session,
+               session_store: ^store
+             } = :sys.get_state(agent)
+    end
+  end
+
   describe "handle_cast/2" do
     test ":abort_job은 실행 중인 job worker를 종료하고 aborted job_end를 보낸다" do
-      {:ok, agent} = Agent.spawn(config())
+      {:ok, agent} = spawn_agent()
       agent_ref = Process.monitor(agent)
 
       collector =
@@ -94,7 +126,7 @@ defmodule Pado.AgentTest do
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
-      {:ok, agent} = Agent.spawn(config(), session: session)
+      {:ok, agent} = spawn_agent(session: session)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
@@ -116,7 +148,7 @@ defmodule Pado.AgentTest do
       assistant = %Assistant{content: [{:text, "ok"}], timestamp: now()}
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
-      {:ok, agent} = Agent.spawn(config(), session: session, store: {Store, owner: self()})
+      {:ok, agent} = spawn_agent(session: session, store: {Store, owner: self()})
       assert_receive {:store_save, ^session}
 
       collector = collect_stream(agent)
@@ -139,8 +171,6 @@ defmodule Pado.AgentTest do
         abort: fn task -> Task.shutdown(task, :brutal_kill) end
       }
 
-      config = %{config() | harness: %Harness{tools: [tool]}}
-
       session = Session.new("session-1", timestamp: now())
 
       asst1 = %Assistant{
@@ -152,7 +182,7 @@ defmodule Pado.AgentTest do
 
       Pado.Test.FakeLLM.put_responses([ok_stream(asst1), ok_stream(asst2)])
 
-      {:ok, agent} = Agent.spawn(config, session: session, store: {Store, owner: self()})
+      {:ok, agent} = spawn_agent(tools: [tool], session: session, store: {Store, owner: self()})
       assert_receive {:store_save, ^session}
 
       collector = collect_stream(agent)
@@ -186,7 +216,6 @@ defmodule Pado.AgentTest do
         abort: fn task -> Task.shutdown(task, :brutal_kill) end
       }
 
-      config = %{config() | harness: %Harness{tools: [tool]}}
       session = Session.new("session-1", cwd: "/tmp/pado-workspace", timestamp: now())
 
       assistant = %Assistant{
@@ -196,7 +225,7 @@ defmodule Pado.AgentTest do
 
       Pado.Test.FakeLLM.put_response(ok_stream(assistant))
 
-      {:ok, agent} = Agent.spawn(config, session: session)
+      {:ok, agent} = spawn_agent(tools: [tool], session: session)
       collector = collect_stream(agent)
 
       assert :ok = wait_until_subscriber_count(agent, 1)
@@ -209,7 +238,7 @@ defmodule Pado.AgentTest do
     end
 
     test "세션 없이 메시지로 시작하면 에러를 반환한다" do
-      {:ok, agent} = Agent.spawn(config())
+      {:ok, agent} = spawn_agent()
 
       assert {:error, :missing_session} = Agent.start(agent, "next")
 
@@ -232,15 +261,14 @@ defmodule Pado.AgentTest do
     end
   end
 
-  defp config do
-    %AgentConfig{
-      llm: %LLM{
-        provider: :openai_codex,
-        credentials: Credentials.build(:openai_codex, "a", "r", 3600),
-        model: %Model{id: "test", provider: :test}
-      },
-      harness: %Harness{}
-    }
+  defp spawn_agent(opts \\ []) do
+    Agent.spawn(
+      :openai_codex,
+      Keyword.get(opts, :credentials, Credentials.build(:openai_codex, "a", "r", 3600)),
+      Keyword.get(opts, :model, %Model{id: "test", provider: :openai_codex}),
+      Keyword.get(opts, :reasoning_effort),
+      Keyword.put_new(opts, :router, Pado.Test.FakeLLM)
+    )
   end
 
   defp collect_stream(agent) do

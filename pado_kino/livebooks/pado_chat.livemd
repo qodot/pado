@@ -281,7 +281,17 @@ Kino.listen(form, fn %{data: %{model: model_id, effort: effort, prompt: text}} -
 
       Kino.Frame.append(chat_frame, Kino.Markdown.new("**나**\n\n" <> text))
 
-      {:ok, agent_pid} = Pado.Agent.spawn(current_agent, session: session, store: store)
+      {:ok, agent_pid} =
+        Pado.Agent.spawn(
+          current_agent.llm.provider,
+          current_agent.llm.credentials,
+          current_agent.llm.model,
+          Keyword.get(current_agent.llm.opts, :reasoning_effort),
+          router: current_agent.llm.router,
+          tools: current_agent.harness.tools,
+          session: session,
+          store: store
+        )
 
       collector =
         Task.async(fn ->

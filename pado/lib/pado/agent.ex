@@ -4,24 +4,27 @@ defmodule Pado.Agent do
   alias Pado.Agent.{Job, Session, Turn}
   alias Pado.Agent.Session.Store
   alias Pado.AgentConfig
+  alias Pado.LLM.Credential.OAuth.Credentials
   alias Pado.LLM.Message.User
+  alias Pado.LLM.Model
 
   @type t :: pid()
 
-  @spec spawn(AgentConfig.t()) :: {:ok, pid()}
-  def spawn(%AgentConfig{} = config), do: spawn(config, [])
-
-  @spec spawn(AgentConfig.t(), keyword()) :: {:ok, pid()}
-  def spawn(%AgentConfig{} = config, opts) when is_list(opts) do
+  @spec spawn(AgentConfig.provider(), Credentials.t(), Model.t(), atom() | nil, keyword()) ::
+          {:ok, pid()}
+  def spawn(
+        provider,
+        %Credentials{} = credentials,
+        %Model{} = model,
+        reasoning_effort,
+        opts \\ []
+      ) do
+    config = AgentConfig.build(provider, credentials, model, reasoning_effort, opts)
     GenServer.start(__MODULE__, {config, opts})
   end
 
-  @spec start(pid(), Job.t() | User.t() | String.t(), keyword()) :: :ok | {:error, term()}
+  @spec start(pid(), User.t() | String.t(), keyword()) :: :ok | {:error, term()}
   def start(agent, input, opts \\ [])
-
-  def start(agent, %Job{} = job, []) when is_pid(agent) do
-    GenServer.call(agent, {:start_job, self(), job, callers()})
-  end
 
   def start(agent, %User{} = user, opts) when is_pid(agent) and is_list(opts) do
     GenServer.call(agent, {:start_session_job, user, opts, callers()})
@@ -56,14 +59,6 @@ defmodule Pado.Agent do
   end
 
   @impl true
-  def handle_call({:start_job, _subscriber, %Job{} = job, callers}, _from, %{job: nil} = state) do
-    {:reply, :ok, start_job(state, job, callers)}
-  end
-
-  def handle_call({:start_job, _subscriber, %Job{}, _callers}, _from, state) do
-    {:reply, {:error, :already_started}, state}
-  end
-
   def handle_call(
         {:start_session_job, %User{} = user, opts, callers},
         _from,

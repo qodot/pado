@@ -4,12 +4,8 @@ defmodule PadoWebWeb.SessionLive do
   alias Pado.Agent, as: PadoAgent
   alias Pado.Agent.Session
   alias Pado.Agent.Session.Store
-  alias Pado.AgentConfig
-  alias Pado.AgentConfig.{Harness, LLM}
-  alias Pado.AgentConfig.Tools.Bash
   alias Pado.LLM.Credential
   alias Pado.LLM.Catalog.OpenAICodex
-  alias Pado.LLM.Message.User
 
   @default_sessions_directory Path.expand("~/.config/pado/sessions")
   @reasoning_efforts [:none, :low, :medium, :high, :xhigh]
@@ -294,11 +290,17 @@ defmodule PadoWebWeb.SessionLive do
 
   defp run_agent(socket, message) do
     with %Session{} = session <- socket.assigns.selected_session,
-         {:ok, config} <- agent_config(session),
-         {:ok, agent} <- PadoAgent.spawn(config, session: session, store: session_store()),
+         {:ok, model} <- session_model(session),
+         {:ok, credentials} <- Credential.load(model.provider),
+         {:ok, agent} <-
+           PadoAgent.spawn(model.provider, credentials, model, session.reasoning_effort,
+             router: llm_router(),
+             session: session,
+             store: session_store()
+           ),
          :ok <- start_agent_stream(agent, session.id, self()),
          :ok <- wait_until_subscriber_count(agent, 1),
-         :ok <- PadoAgent.start(agent, User.new(message)),
+         :ok <- PadoAgent.start(agent, message),
          {:ok, session} <- Store.load(session_store(), session.id) do
       socket =
         socket
@@ -321,23 +323,6 @@ defmodule PadoWebWeb.SessionLive do
     end
   end
 
-  defp agent_config(%Session{} = session) do
-    with {:ok, model} <- session_model(session),
-         {:ok, credentials} <- Credential.load(model.provider) do
-      {:ok,
-       %AgentConfig{
-         llm: %LLM{
-           provider: model.provider,
-           credentials: credentials,
-           model: model,
-           router: llm_router(),
-           opts: llm_opts(session.reasoning_effort)
-         },
-         harness: %Harness{tools: [Bash.tool()]}
-       }}
-    end
-  end
-
   defp session_model(%Session{model: nil}), do: {:ok, OpenAICodex.default()}
 
   defp session_model(%Session{model: model_id}) do
@@ -347,22 +332,19 @@ defmodule PadoWebWeb.SessionLive do
     end
   end
 
-  defp llm_opts(nil), do: []
-  defp llm_opts(reasoning_effort), do: [reasoning_effort: reasoning_effort]
-
   defp llm_router do
     Application.get_env(:pado_web, :llm_router, Pado.LLM)
   end
 
   defp start_agent_stream(agent, session_id, live_view) do
-    case Task.start(fn ->
-           agent
-           |> Pado.Stream.subscribe()
-           |> Enum.each(fn event -> send(live_view, {:agent_event, session_id, event}) end)
-         end) do
-      {:ok, _pid} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
+    {:ok, _pid} =
+      Task.start(fn ->
+        agent
+        |> Pado.Stream.subscribe()
+        |> Enum.each(fn event -> send(live_view, {:agent_event, session_id, event}) end)
+      end)
+
+    :ok
   end
 
   defp wait_until_subscriber_count(agent, count),
