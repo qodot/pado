@@ -1,5 +1,6 @@
 defmodule Pado.Agent.Event do
   alias Pado.Agent.Turn
+  alias Pado.AgentConfig.Tools.Tool.Result
   alias Pado.LLM
   alias Pado.LLM.Message
   alias Pado.LLM.Message.ToolResult
@@ -37,7 +38,7 @@ defmodule Pado.Agent.Event do
                tool_call_id: String.t(),
                tool_name: String.t(),
                args: map(),
-               partial_result: term()
+               partial_result: Result.t()
              }}
           | {:tool_execution_end,
              %{

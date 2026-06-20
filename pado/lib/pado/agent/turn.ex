@@ -3,6 +3,7 @@ defmodule Pado.Agent.Turn do
   alias Pado.AgentConfig
   alias Pado.AgentConfig.LLM
   alias Pado.AgentConfig.Tools.Tool
+  alias Pado.AgentConfig.Tools.Tool.Result
   alias Pado.LLM.Message
   alias Pado.LLM.Message.{Assistant, ToolResult}
   alias Pado.LLM.Usage
@@ -209,8 +210,7 @@ defmodule Pado.Agent.Turn do
     try do
       case await_tool(job, call, turn_index, task, send_job_event) do
         {:ok, output} ->
-          text = if is_binary(output), do: output, else: inspect(output)
-          ToolResult.text(id, name, text)
+          output |> Result.from_output() |> to_llm_tool_result(id, name)
 
         {:error, message} ->
           ToolResult.error(id, name, message)
@@ -235,6 +235,8 @@ defmodule Pado.Agent.Turn do
 
     receive do
       {:tool_execution_update, tool_call_id, partial_result} when tool_call_id == call.id ->
+        partial_result = Result.from_output(partial_result)
+
         send_job_event.(
           {:tool_execution_update,
            %{
@@ -263,6 +265,16 @@ defmodule Pado.Agent.Turn do
         Task.shutdown(task, :brutal_kill)
         {:error, "tool task timed out"}
     end
+  end
+
+  defp to_llm_tool_result(%Result{} = result, tool_call_id, tool_name) do
+    %ToolResult{
+      tool_call_id: tool_call_id,
+      tool_name: tool_name,
+      content: result.content,
+      is_error: false,
+      timestamp: DateTime.utc_now()
+    }
   end
 
   defp build_turn(turn_index, %Assistant{} = assistant, tool_results) do

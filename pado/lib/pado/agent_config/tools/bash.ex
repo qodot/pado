@@ -1,5 +1,6 @@
 defmodule Pado.AgentConfig.Tools.Bash do
   alias Pado.AgentConfig.Tools.Tool, as: AgentTool
+  alias Pado.AgentConfig.Tools.Tool.Result
   alias Pado.LLM.Tool, as: LLMTool
 
   @default_timeout_seconds 60
@@ -40,7 +41,9 @@ defmodule Pado.AgentConfig.Tools.Bash do
             "required" => ["command"]
           }
         ),
-      async: fn args, ctx, _send_update -> Task.async(fn -> execute(args, ctx, timeout) end) end,
+      async: fn args, ctx, _send_update ->
+        Task.async(fn -> args |> execute(ctx, timeout) |> Result.text() end)
+      end,
       abort: &abort/1
     }
   end

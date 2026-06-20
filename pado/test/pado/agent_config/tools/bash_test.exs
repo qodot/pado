@@ -2,6 +2,7 @@ defmodule Pado.AgentConfig.Tools.BashTest do
   use ExUnit.Case, async: true
 
   alias Pado.AgentConfig.Tools.Tool, as: AgentTool
+  alias Pado.AgentConfig.Tools.Tool.Result
   alias Pado.LLM.Tool, as: LLMTool
   alias Pado.AgentConfig.Tools.Bash
 
@@ -114,8 +115,18 @@ defmodule Pado.AgentConfig.Tools.BashTest do
   end
 
   defp run_async(async, args, ctx) do
-    async.(args, ctx)
+    async.(args, ctx, fn _ -> :ok end)
     |> Task.await(:infinity)
+    |> result_text()
+  end
+
+  defp result_text(%Result{content: parts}) do
+    parts
+    |> Enum.flat_map(fn
+      {:text, text} -> [text]
+      _part -> []
+    end)
+    |> Enum.join()
   end
 
   defp tmp_path(name) do

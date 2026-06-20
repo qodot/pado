@@ -4,6 +4,7 @@ defmodule Pado.Agent.TurnTest do
   alias Pado.Agent.{Job, Turn}
   alias Pado.AgentConfig
   alias Pado.AgentConfig.Tools.Tool
+  alias Pado.AgentConfig.Tools.Tool.Result
   alias Pado.LLM.{Context, Model, Usage}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Credential.OAuth.Credentials
@@ -386,7 +387,7 @@ defmodule Pado.Agent.TurnTest do
     } do
       tool =
         make_tool("echo", fn _args, _ctx, send_update ->
-          send_update.(%{step: "running"})
+          send_update.(Result.text("running"))
           "ok"
         end)
 
@@ -406,7 +407,7 @@ defmodule Pado.Agent.TurnTest do
                           tool_call_id: "c1",
                           tool_name: "echo",
                           args: %{"k" => "v"},
-                          partial_result: %{step: "running"}
+                          partial_result: %Result{content: [{:text, "running"}]}
                         }}}
     end
 
