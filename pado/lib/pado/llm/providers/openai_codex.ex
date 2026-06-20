@@ -1,10 +1,10 @@
 defmodule Pado.LLM.Providers.OpenAICodex do
   @behaviour Pado.LLM.Provider
 
-  alias Pado.LLM.{Context, Model}
+  alias Pado.LLM.{Context, Model, SSE}
   alias Pado.LLM.Stream, as: RouterStream
   alias Pado.LLM.Credential.OAuth.Credentials
-  alias Pado.LLM.Providers.OpenAICodex.{EventMapper, Request, SSE}
+  alias Pado.LLM.Providers.OpenAICodex.{EventMapper, Request}
 
   @finch_pool Req.Finch
   @default_receive_timeout 300_000

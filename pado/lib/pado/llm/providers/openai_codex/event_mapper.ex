@@ -1,7 +1,6 @@
 defmodule Pado.LLM.Providers.OpenAICodex.EventMapper do
   alias Pado.LLM.Message.Assistant
-  alias Pado.LLM.Providers.OpenAICodex.SSE
-  alias Pado.LLM.{Model, Usage}
+  alias Pado.LLM.{Model, SSE, Usage}
 
   @reasoning_delta_types [
     "response.reasoning.delta",
