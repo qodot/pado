@@ -1,8 +1,8 @@
 defmodule Pado.AgentConfig do
-  @type provider :: :openai_codex
+  @type provider :: :openai_codex | :z_ai
   @type reasoning_effort :: :none | :low | :medium | :high | :xhigh
 
-  @providers [:openai_codex]
+  @providers [:openai_codex, :z_ai]
 
   alias Pado.Agent.Job
   alias Pado.AgentConfig.{Harness, LLM}

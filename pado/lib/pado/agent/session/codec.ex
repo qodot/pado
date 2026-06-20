@@ -189,6 +189,7 @@ defmodule Pado.Agent.Session.Codec do
 
   defp decode_provider(nil), do: {:ok, nil}
   defp decode_provider("openai_codex"), do: {:ok, :openai_codex}
+  defp decode_provider("z_ai"), do: {:ok, :z_ai}
   defp decode_provider(value), do: {:error, {:unknown_provider, value}}
 
   defp decode_reasoning_effort(nil), do: {:ok, nil}

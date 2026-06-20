@@ -1,4 +1,5 @@
 defmodule Pado.LLM.Credential.FileLoader do
+  alias Pado.LLM.Credential.ApiKey.ZAI
   alias Pado.LLM.Credential.OAuth.{Credentials, OpenAICodex}
 
   def load(path) when is_binary(path) do
@@ -28,5 +29,6 @@ defmodule Pado.LLM.Credential.FileLoader do
   end
 
   defp refresh(%Credentials{provider: :openai_codex} = creds), do: OpenAICodex.refresh(creds)
+  defp refresh(%Credentials{provider: :z_ai} = creds), do: ZAI.refresh(creds)
   defp refresh(%Credentials{provider: other}), do: {:error, {:unsupported_provider, other}}
 end
