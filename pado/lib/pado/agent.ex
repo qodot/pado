@@ -105,7 +105,7 @@ defmodule Pado.Agent do
       when is_pid(pid) and is_reference(ref) do
     Job.abort(job, pid, ref)
 
-    notify(state, {
+    notify(state.subscribers, {
       :job_end,
       %{job_id: job.job_id, status: :aborted, reason: nil, turns: job.turns}
     })
@@ -118,19 +118,19 @@ defmodule Pado.Agent do
   @impl true
   def handle_info({:receive_job_event, {:tool_execution_start, data} = event}, state) do
     job = Job.start_tool(state.job, data.tool_call, data.task, data.abort)
-    notify(%{state | job: job}, sanitize_tool_event(event))
+    notify(state.subscribers, sanitize_tool_event(event))
     {:noreply, %{state | job: job}}
   end
 
   def handle_info({:receive_job_event, {:tool_execution_end, data} = event}, state) do
     job = Job.finish_tool(state.job, data.tool_call_id)
-    notify(%{state | job: job}, event)
+    notify(state.subscribers, event)
     {:noreply, %{state | job: job}}
   end
 
   def handle_info({:receive_job_event, {:turn_end, %{turn: turn}} = event}, state) do
     {state, event} = append_turn_to_session(state, turn, event)
-    notify(state, event)
+    notify(state.subscribers, event)
     {:noreply, state}
   end
 
@@ -146,12 +146,12 @@ defmodule Pado.Agent do
         job_worker_monitor: nil
     }
 
-    notify(state, {:job_end, Map.delete(data, :job)})
+    notify(state.subscribers, {:job_end, Map.delete(data, :job)})
     {:stop, :normal, state}
   end
 
   def handle_info({:receive_job_event, event}, state) do
-    notify(state, event)
+    notify(state.subscribers, event)
     {:noreply, state}
   end
 
@@ -163,7 +163,7 @@ defmodule Pado.Agent do
     state = %{state | job_worker_pid: nil, job_worker_monitor: nil}
 
     notify(
-      state,
+      state.subscribers,
       {:job_end,
        %{
          job_id: state.job.job_id,
@@ -200,7 +200,7 @@ defmodule Pado.Agent do
   defp stop_if_no_subscribers(state), do: {:noreply, state}
 
   defp start_job(state, %Job{} = job, callers) do
-    notify(state, {:job_start, %{job_id: job.job_id}})
+    notify(state.subscribers, {:job_start, %{job_id: job.job_id}})
     parent = self()
 
     send_job_event = fn event -> send(parent, {:receive_job_event, event}) end
@@ -261,7 +261,7 @@ defmodule Pado.Agent do
     [self() | Process.get(:"$callers", [])]
   end
 
-  defp notify(%{subscribers: subscribers}, event) do
+  defp notify(subscribers, event) do
     Enum.each(subscribers, fn {_, {subscriber, stream_ref}} ->
       send(subscriber, {stream_ref, event})
     end)
