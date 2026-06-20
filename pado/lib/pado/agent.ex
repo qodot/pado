@@ -60,7 +60,7 @@ defmodule Pado.Agent do
          {session, _entries} = Session.append_messages(session, [user]),
          :ok <- Store.save(store, session) do
       job = Job.build(session)
-      {:reply, :ok, start_job(state, job, callers)}
+      {:reply, :ok, run_job(state, job, callers)}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -199,7 +199,7 @@ defmodule Pado.Agent do
 
   defp stop_if_no_subscribers(state), do: {:noreply, state}
 
-  defp start_job(state, %Job{} = job, callers) do
+  defp run_job(state, %Job{} = job, callers) do
     notify_subscribers(state.subscribers, {:job_start, %{job_id: job.job_id}})
     parent = self()
 
