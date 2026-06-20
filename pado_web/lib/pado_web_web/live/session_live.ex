@@ -262,6 +262,17 @@ defmodule PadoWebWeb.SessionLive do
     {:noreply, socket}
   end
 
+  def handle_info({:agent_event, session_id, {:tool_execution_update, data}}, socket) do
+    socket =
+      if active_stream?(socket, session_id) do
+        append_streaming_tool_update(socket, data)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_info({:agent_event, _session_id, _event}, socket), do: {:noreply, socket}
 
   defp assign_selected_session(socket, nil) do
@@ -383,7 +394,8 @@ defmodule PadoWebWeb.SessionLive do
       id: data.tool_call_id,
       name: data.tool_name,
       args: data.args || %{},
-      turn_index: data.turn_index
+      turn_index: data.turn_index,
+      updates: []
     }
 
     streaming_tools =
@@ -394,6 +406,27 @@ defmodule PadoWebWeb.SessionLive do
     socket
     |> assign(:streaming_tools, streaming_tools)
     |> append_streaming_order({:tool, tool.id})
+  end
+
+  defp append_streaming_tool_update(socket, data) do
+    update = %{
+      partial_result: data.partial_result,
+      turn_index: data.turn_index
+    }
+
+    streaming_tools =
+      Enum.map(socket.assigns.streaming_tools, fn
+        %{id: id, updates: updates} = tool when id == data.tool_call_id ->
+          %{tool | updates: updates ++ [update]}
+
+        %{id: id} = tool when id == data.tool_call_id ->
+          Map.put(tool, :updates, [update])
+
+        tool ->
+          tool
+      end)
+
+    assign(socket, :streaming_tools, streaming_tools)
   end
 
   defp append_streaming_delta(socket, field, delta) do

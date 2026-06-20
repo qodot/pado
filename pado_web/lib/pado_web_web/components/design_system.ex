@@ -170,6 +170,21 @@ defmodule PadoWebWeb.DesignSystem do
             {markdown_html(message_text(@result))}
           </div>
         </details>
+        <div
+          :if={Map.get(@tool, :updates, []) != []}
+          data-tool-execution-updates
+          class="border-t border-base-300 px-3 py-2"
+        >
+          <div class="mb-1 text-xs font-medium text-base-content/55">Updates</div>
+          <div class="flex flex-col gap-1">
+            <div
+              :for={update <- Map.get(@tool, :updates, [])}
+              class="rounded bg-base-100 px-2 py-1 text-xs leading-6 text-base-content/70"
+            >
+              {partial_result_text(update.partial_result)}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     """
@@ -443,6 +458,9 @@ defmodule PadoWebWeb.DesignSystem do
   end
 
   defp tool_args_summary(_args), do: ""
+
+  defp partial_result_text(result) when is_binary(result), do: result
+  defp partial_result_text(result), do: inspect(result)
 
   defp tool_call_entry_id(tool_call_id), do: "session-entry-tool-#{tool_call_id}"
 

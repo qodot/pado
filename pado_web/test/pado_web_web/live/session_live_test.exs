@@ -765,6 +765,46 @@ defmodule PadoWebWeb.SessionLiveTest do
            )
   end
 
+  test "tool execution update renders in the running tool", %{conn: conn, store: store} do
+    Application.put_env(:pado_web, :session_live_test_router_mode, :tool_call)
+
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Run a tool"})
+    |> render_submit()
+
+    assert_receive :fake_router_tool_call_requested, 1_000
+
+    assert eventually(fn ->
+             render(view) =~ ~s(id="session-running-tool-call-bash")
+           end)
+
+    send(
+      view.pid,
+      {:agent_event, "session-a",
+       {:tool_execution_update,
+        %{
+          job_id: "job-1",
+          turn_index: 1,
+          tool_call_id: "call-bash",
+          tool_name: "bash",
+          args: %{"command" => "sleep 1; printf tool-done"},
+          partial_result: "Reading output"
+        }}}
+    )
+
+    assert eventually(fn ->
+             html = render(view)
+
+             html =~ ~s(data-tool-execution-updates) and
+               html =~ "Updates" and
+               html =~ "Reading output"
+           end)
+  end
+
   test "streaming items keep start order when tool starts before response", %{
     conn: conn,
     store: store
