@@ -541,7 +541,7 @@ defmodule Pado.StreamTest do
   defp make_tool(name, execute) do
     %Tool{
       schema: LLMTool.new(name, "d", %{}),
-      async: fn args, ctx -> Task.async(fn -> execute.(args, ctx) end) end,
+      async: fn args, ctx, _send_update -> Task.async(fn -> execute.(args, ctx) end) end,
       abort: fn task -> Task.shutdown(task, :brutal_kill) end
     }
   end

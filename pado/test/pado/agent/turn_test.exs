@@ -380,6 +380,36 @@ defmodule Pado.Agent.TurnTest do
                         }}}
     end
 
+    test "tool task가 보낸 partial result를 :tool_execution_update로 중계한다", %{
+      send_event: send_event,
+      creds: creds
+    } do
+      tool =
+        make_tool("echo", fn _args, _ctx, send_update ->
+          send_update.(%{step: "running"})
+          "ok"
+        end)
+
+      asst = %Assistant{
+        content: [{:tool_call, %{id: "c1", name: "echo", args: %{"k" => "v"}}}]
+      }
+
+      Pado.Test.FakeLLM.put_response(ok_stream(asst))
+      {agent, job} = build_setup(creds, tools: [tool])
+      Turn.take(agent, job, send_event)
+
+      assert_received {:sent_event,
+                       {:tool_execution_update,
+                        %{
+                          job_id: "j1",
+                          turn_index: 1,
+                          tool_call_id: "c1",
+                          tool_name: "echo",
+                          args: %{"k" => "v"},
+                          partial_result: %{step: "running"}
+                        }}}
+    end
+
     test "assistant에 tool_call이 없으면 tool_results는 빈 리스트", %{
       send_event: send_event,
       creds: creds
@@ -491,7 +521,7 @@ defmodule Pado.Agent.TurnTest do
       call = %{id: "c1", name: "echo", args: %{"text" => "hello"}}
 
       {:ok, task, _abort} = Turn.start_tool(call, tools)
-      result = Turn.dispatch_tool(call, task)
+      result = Turn.dispatch_tool(build_job(), call, 1, task, ignore_event())
       assert %ToolResult{is_error: false, content: [{:text, "hello"}]} = result
     end
 
@@ -500,7 +530,7 @@ defmodule Pado.Agent.TurnTest do
       call = %{id: "c1", name: "sum", args: %{"a" => 1, "b" => 2}}
 
       {:ok, task, _abort} = Turn.start_tool(call, tools)
-      result = Turn.dispatch_tool(call, task)
+      result = Turn.dispatch_tool(build_job(), call, 1, task, ignore_event())
       assert %ToolResult{is_error: false, content: [{:text, "3"}]} = result
     end
 
@@ -509,7 +539,7 @@ defmodule Pado.Agent.TurnTest do
       call = %{id: "c1", name: "boom", args: %{}}
 
       {:ok, task, _abort} = Turn.start_tool(call, tools)
-      result = Turn.dispatch_tool(call, task)
+      result = Turn.dispatch_tool(build_job(), call, 1, task, ignore_event())
       assert %ToolResult{is_error: true} = result
       assert [{:text, msg}] = result.content
       assert msg =~ "tool task exited"
@@ -519,10 +549,24 @@ defmodule Pado.Agent.TurnTest do
   defp make_tool(name, execute) do
     %Tool{
       schema: LLMTool.new(name, "테스트 도구", %{}),
-      async: fn args, ctx -> Task.async(fn -> execute.(args, ctx) end) end,
+      async: fn args, ctx, send_update ->
+        Task.async(fn -> execute_tool(execute, args, ctx, send_update) end)
+      end,
       abort: fn task -> Task.shutdown(task, :brutal_kill) end
     }
   end
+
+  defp execute_tool(execute, args, ctx, send_update) when is_function(execute, 3) do
+    execute.(args, ctx, send_update)
+  end
+
+  defp execute_tool(execute, args, ctx, _send_update), do: execute.(args, ctx)
+
+  defp build_job do
+    %Job{messages: [User.new("hi")], session_id: "s1", job_id: "j1"}
+  end
+
+  defp ignore_event, do: fn _ -> :ok end
 
   defp ok_stream(final_assistant) do
     {:ok,

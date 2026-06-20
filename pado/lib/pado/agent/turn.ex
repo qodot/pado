@@ -136,7 +136,7 @@ defmodule Pado.Agent.Turn do
              }}
           )
 
-          result = dispatch_tool(call, task)
+          result = dispatch_tool(job, call, turn_index, task, send_job_event)
 
           send_job_event.(
             {:tool_execution_end,
@@ -183,8 +183,17 @@ defmodule Pado.Agent.Turn do
           {:ok, Task.t(), (Task.t() -> any())} | {:error, ToolResult.t()}
   def start_tool(%{id: id, name: name, args: args}, tools, ctx) do
     case find_tool(tools, name) do
-      nil -> {:error, ToolResult.error(id, name, "unknown tool: #{name}")}
-      %Tool{async: async, abort: abort} -> {:ok, async.(args, ctx), abort}
+      nil ->
+        {:error, ToolResult.error(id, name, "unknown tool: #{name}")}
+
+      %Tool{async: async, abort: abort} ->
+        job_worker = self()
+
+        send_update = fn partial_result ->
+          send(job_worker, {:tool_execution_update, id, partial_result})
+        end
+
+        {:ok, async.(args, ctx, send_update), abort}
     end
   end
 
@@ -192,12 +201,13 @@ defmodule Pado.Agent.Turn do
   defp tool_context(%Job{}), do: %{}
 
   @doc false
-  @spec dispatch_tool(Message.tool_call(), Task.t()) :: ToolResult.t()
-  def dispatch_tool(%{id: id, name: name}, task) do
+  @spec dispatch_tool(Job.t(), Message.tool_call(), pos_integer(), Task.t(), send_job_event_fun()) ::
+          ToolResult.t()
+  def dispatch_tool(%Job{} = job, %{id: id, name: name} = call, turn_index, task, send_job_event) do
     trap_exit = Process.flag(:trap_exit, true)
 
     try do
-      case await_tool(task) do
+      case await_tool(job, call, turn_index, task, send_job_event) do
         {:ok, output} ->
           text = if is_binary(output), do: output, else: inspect(output)
           ToolResult.text(id, name, text)
@@ -215,11 +225,43 @@ defmodule Pado.Agent.Turn do
     end
   end
 
-  defp await_tool(task) do
-    case Task.yield(task, @tool_timeout_ms) || Task.shutdown(task, :brutal_kill) do
-      {:ok, output} -> {:ok, output}
-      {:exit, reason} -> {:error, "tool task exited: " <> inspect(reason)}
-      nil -> {:error, "tool task timed out"}
+  defp await_tool(%Job{} = job, call, turn_index, task, send_job_event) do
+    deadline = System.monotonic_time(:millisecond) + @tool_timeout_ms
+    await_tool(job, call, turn_index, task, send_job_event, deadline)
+  end
+
+  defp await_tool(%Job{} = job, call, turn_index, task, send_job_event, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:tool_execution_update, tool_call_id, partial_result} when tool_call_id == call.id ->
+        send_job_event.(
+          {:tool_execution_update,
+           %{
+             job_id: job.job_id,
+             turn_index: turn_index,
+             tool_call_id: call.id,
+             tool_name: call.name,
+             args: call.args,
+             partial_result: partial_result
+           }}
+        )
+
+        await_tool(job, call, turn_index, task, send_job_event, deadline)
+
+      {ref, output} when ref == task.ref ->
+        Process.demonitor(task.ref, [:flush])
+        {:ok, output}
+
+      {:DOWN, ref, :process, _pid, reason} when ref == task.ref ->
+        {:error, "tool task exited: " <> inspect(reason)}
+
+      {:EXIT, pid, reason} when pid == task.pid ->
+        {:error, "tool task exited: " <> inspect(reason)}
+    after
+      remaining ->
+        Task.shutdown(task, :brutal_kill)
+        {:error, "tool task timed out"}
     end
   end
 

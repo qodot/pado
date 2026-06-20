@@ -50,7 +50,7 @@ defmodule Pado.AgentConfigTest do
 
       tool = %AgentTool{
         schema: Tool.new("echo", "d", %{}),
-        async: fn _, _ -> Task.async(fn -> "ok" end) end,
+        async: fn _, _, _ -> Task.async(fn -> "ok" end) end,
         abort: fn task -> Task.shutdown(task, :brutal_kill) end
       }
 
@@ -81,7 +81,7 @@ defmodule Pado.AgentConfigTest do
           tools: [
             %AgentTool{
               schema: tool_schema,
-              async: fn _, _ -> Task.async(fn -> "ok" end) end,
+              async: fn _, _, _ -> Task.async(fn -> "ok" end) end,
               abort: fn task -> Task.shutdown(task, :brutal_kill) end
             }
           ]

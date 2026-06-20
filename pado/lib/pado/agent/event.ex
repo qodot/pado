@@ -30,6 +30,15 @@ defmodule Pado.Agent.Event do
                tool_name: String.t(),
                args: map()
              }}
+          | {:tool_execution_update,
+             %{
+               job_id: job_id(),
+               turn_index: turn_index(),
+               tool_call_id: String.t(),
+               tool_name: String.t(),
+               args: map(),
+               partial_result: term()
+             }}
           | {:tool_execution_end,
              %{
                job_id: job_id(),

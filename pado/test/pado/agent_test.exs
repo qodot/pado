@@ -191,7 +191,7 @@ defmodule Pado.AgentTest do
     test "tool turn마다 세션 store에 저장한다" do
       tool = %Pado.AgentConfig.Tools.Tool{
         schema: Pado.LLM.Tool.new("echo", "d", %{}),
-        async: fn _args, _ctx -> Task.async(fn -> "result" end) end,
+        async: fn _args, _ctx, _send_update -> Task.async(fn -> "result" end) end,
         abort: fn task -> Task.shutdown(task, :brutal_kill) end
       }
 
@@ -251,7 +251,7 @@ defmodule Pado.AgentTest do
 
       tool = %Pado.AgentConfig.Tools.Tool{
         schema: Pado.LLM.Tool.new("echo", "d", %{}),
-        async: fn _args, ctx ->
+        async: fn _args, ctx, _send_update ->
           send(parent, {:tool_ctx, ctx})
           Task.async(fn -> "result" end)
         end,

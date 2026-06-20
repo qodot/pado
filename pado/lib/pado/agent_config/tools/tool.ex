@@ -1,7 +1,8 @@
 defmodule Pado.AgentConfig.Tools.Tool do
   alias Pado.LLM.Tool, as: RouterTool
 
-  @type async_fun :: (map(), map() -> Task.t())
+  @type update_fun :: (term() -> any())
+  @type async_fun :: (map(), map(), update_fun() -> Task.t())
   @type abort_fun :: (Task.t() -> any())
 
   @type t :: %__MODULE__{

@@ -40,7 +40,7 @@ defmodule Pado.AgentConfig.Tools.Bash do
             "required" => ["command"]
           }
         ),
-      async: fn args, ctx -> Task.async(fn -> execute(args, ctx, timeout) end) end,
+      async: fn args, ctx, _send_update -> Task.async(fn -> execute(args, ctx, timeout) end) end,
       abort: &abort/1
     }
   end
