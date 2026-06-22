@@ -45,7 +45,7 @@
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
@@ -80,7 +80,7 @@
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
@@ -96,6 +96,20 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* 애플리케이션 CSS를 추가하는 파일이다. */
+
+/* 플랫 스타일을 유지하기 위해 daisyUI 기본 입체 효과를 끈다. */
+.btn,
+.alert,
+.badge,
+.dropdown-content,
+.input,
+.select,
+.textarea,
+[data-tool-execution-start] > div,
+[data-chat-composer] > div {
+  box-shadow: none;
+  text-shadow: none;
+}
 
 .markdown-content > :first-child {
   margin-top: 0;

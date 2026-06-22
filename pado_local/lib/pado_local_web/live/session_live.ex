@@ -51,20 +51,25 @@ defmodule PadoLocalWeb.SessionLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="grid h-full grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <aside class="min-h-52 overflow-y-auto bg-base-200/80">
+      <div class="grid h-full grid-cols-1 bg-base-200/55 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside class={[
+          "min-h-52 overflow-y-auto border-base-300 bg-base-200/85 lg:block lg:border-r",
+          @selected_id && "hidden"
+        ]}>
           <div class="flex items-center justify-between px-5 py-5">
             <div>
-              <p class="text-xs font-medium uppercase text-base-content/60">Workspace</p>
-              <h1 class="text-lg font-semibold">Sessions</h1>
+              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/55">
+                Workspace
+              </p>
+              <h1 class="text-lg font-bold">Sessions</h1>
             </div>
             <div class="flex items-center gap-2">
-              <span class="badge badge-neutral">{length(@sessions)}</span>
+              <span class="badge badge-neutral badge-sm rounded-full">{length(@sessions)}</span>
               <button
                 type="button"
                 phx-click="create_session"
-                aria-label="New session"
-                class="btn btn-primary btn-square btn-sm rounded-full"
+                aria-label="Start session"
+                class="btn btn-primary btn-square min-h-11 w-11 rounded-full border-0 shadow-none"
               >
                 <.icon name="hero-plus" class="size-4" />
               </button>
@@ -72,9 +77,9 @@ defmodule PadoLocalWeb.SessionLive do
           </div>
 
           <div :if={@sessions_error} class="p-3">
-            <div class="alert alert-error text-sm">
+            <div class="alert alert-error items-start text-sm">
               <.icon name="hero-exclamation-triangle" class="size-4" />
-              <span>Could not load sessions.</span>
+              <span>Check the sessions folder and try again.</span>
             </div>
           </div>
 
@@ -91,25 +96,38 @@ defmodule PadoLocalWeb.SessionLive do
             </ul>
           </nav>
 
-          <div :if={@sessions == [] and !@sessions_error} class="p-4 text-sm text-base-content/60">
-            No sessions yet.
+          <div
+            :if={@sessions == [] and !@sessions_error}
+            class="mx-3 rounded-box border border-dashed border-base-300 bg-base-100/70 p-4 text-sm text-base-content/65"
+          >
+            Start a session to choose a workspace folder.
           </div>
         </aside>
 
         <section class="min-h-0 bg-base-100">
           <div :if={@selected_id} class="flex h-full flex-col">
-            <div class="px-6 py-5">
-              <div class="flex items-center gap-2">
-                <span class="status status-primary" />
-                <p class="text-sm font-medium text-base-content/60">Active session</p>
+            <div class="border-b border-base-200 px-4 py-4 sm:px-6">
+              <div class="mx-auto flex max-w-4xl items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="status status-primary" />
+                    <p class="text-sm font-semibold text-base-content/60">Live workspace</p>
+                  </div>
+                  <h2 class="mt-1 truncate text-xl font-bold">{@selected_id}</h2>
+                </div>
+                <.link
+                  navigate={~p"/sessions"}
+                  class="btn btn-ghost btn-sm min-h-11 rounded-full lg:hidden"
+                >
+                  Sessions
+                </.link>
               </div>
-              <h2 class="mt-1 truncate text-xl font-semibold">{@selected_id}</h2>
             </div>
 
             <div :if={@selected_session_error} class="p-5">
-              <div class="alert alert-error">
+              <div class="alert alert-error mx-auto max-w-4xl items-start">
                 <.icon name="hero-exclamation-triangle" class="size-5" />
-                <span>Could not load session.</span>
+                <span>Open another session or check that this session file still exists.</span>
               </div>
             </div>
 
@@ -117,10 +135,13 @@ defmodule PadoLocalWeb.SessionLive do
               :if={@selected_session && @selected_session.entries == []}
               class="flex flex-1 items-center justify-center p-6"
             >
-              <div class="max-w-sm text-center">
-                <h3 class="text-lg font-semibold">No messages yet</h3>
+              <div class="max-w-sm rounded-box border border-dashed border-base-300 bg-base-100 p-6 text-center">
+                <div class="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <.icon name="hero-chat-bubble-left-right" class="size-5" />
+                </div>
+                <h3 class="mt-4 text-lg font-bold">Ask the first question</h3>
                 <p class="mt-2 text-sm text-base-content/60">
-                  This session does not have any saved messages.
+                  Send a message to start working in this folder.
                 </p>
               </div>
             </div>
@@ -129,9 +150,9 @@ defmodule PadoLocalWeb.SessionLive do
               :if={@selected_session && @selected_session.entries != []}
               id="session-entry-list"
               phx-hook="SessionScroll"
-              class="min-h-0 flex-1 overflow-y-auto px-[72px] py-5"
+              class="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
             >
-              <div class="flex flex-col gap-4">
+              <div class="mx-auto flex max-w-4xl flex-col gap-5">
                 <.session_entries entries={@selected_session.entries} />
                 <%= for item <- streaming_items(@streaming_order, @streaming_response, @streaming_tools) do %>
                   <.session_running_tool
@@ -165,11 +186,13 @@ defmodule PadoLocalWeb.SessionLive do
             :if={!@selected_id}
             class="flex h-full min-h-96 items-center justify-center p-6"
           >
-            <div class="max-w-sm text-center">
-              <div class="loading loading-ring loading-lg text-primary" />
-              <h2 class="mt-4 text-xl font-semibold">Select a session</h2>
+            <div class="max-w-sm rounded-box border border-base-200 bg-base-100 p-6 text-center">
+              <div class="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <.icon name="hero-arrow-left-circle" class="size-5" />
+              </div>
+              <h2 class="mt-4 text-xl font-bold">Open a saved session</h2>
               <p class="mt-2 text-sm text-base-content/60">
-                Choose a session from the sidebar to open its conversation.
+                Pick a session from the list to continue its workspace thread.
               </p>
             </div>
           </div>
@@ -180,6 +203,10 @@ defmodule PadoLocalWeb.SessionLive do
   end
 
   @impl true
+  def handle_event("change_message", %{"message" => message}, socket) do
+    {:noreply, assign(socket, :message, message)}
+  end
+
   def handle_event("send_message", %{"message" => message}, socket) do
     message = String.trim(message)
 

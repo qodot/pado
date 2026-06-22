@@ -377,8 +377,8 @@ defmodule PadoLocalWeb.SessionLiveTest do
     response = html_response(conn, 200)
     assert response =~ "Pado Local"
     assert response =~ "Sessions"
-    assert response =~ "Select a session"
-    assert response =~ ~s(aria-label="New session")
+    assert response =~ "Open a saved session"
+    assert response =~ ~s(aria-label="Start session")
   end
 
   test "GET /sessions lists stored sessions", %{conn: conn, store: store} do
@@ -401,7 +401,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/sessions")
 
     view
-    |> element(~s(button[aria-label="New session"]))
+    |> element(~s(button[aria-label="Start session"]))
     |> render_click()
 
     assert_receive :fake_cwd_picker_called
@@ -432,12 +432,12 @@ defmodule PadoLocalWeb.SessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/sessions")
 
     view
-    |> element(~s(button[aria-label="New session"]))
+    |> element(~s(button[aria-label="Start session"]))
     |> render_click()
 
     assert_receive :fake_cwd_picker_called
     assert {:ok, []} = Store.list(store)
-    assert render(view) =~ "No sessions yet."
+    assert render(view) =~ "Start a session to choose a workspace folder."
   end
 
   test "GET /sessions/:id marks the selected session", %{conn: conn, store: store} do
@@ -446,7 +446,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
     conn = get(conn, ~p"/sessions/session-a")
 
     response = html_response(conn, 200)
-    assert response =~ "Active session"
+    assert response =~ "Live workspace"
     assert response =~ "session-a"
     assert response =~ "status-primary"
     refute response =~ "status-success"
@@ -491,14 +491,14 @@ defmodule PadoLocalWeb.SessionLiveTest do
     assert response =~ ~s(data-tool-execution-result)
     assert response =~ ~r/<details[^>]+data-tool-execution-result/
     refute response =~ ~r/<details[^>]+data-tool-execution-result[^>]+open/
-    assert response =~ "Result"
-    assert response =~ "Tool call"
+    assert response =~ "Tool result"
+    assert response =~ "Run tool"
     assert response =~ "pwd"
     assert response =~ "tool output"
     refute response =~ ~s(data-entry-kind="tool_result")
     assert response =~ ~s(id="session-entry-list")
     assert response =~ ~s(phx-hook="SessionScroll")
-    assert response =~ "rounded-lg"
+    assert response =~ "rounded-box"
     assert response =~ ~s(data-markdown)
     refute response =~ "chat-bubble"
     refute response =~ "Assistant"
@@ -581,11 +581,12 @@ defmodule PadoLocalWeb.SessionLiveTest do
     assert response =~ ~s(data-chat-composer)
     assert response =~ ~s(id="chat-composer-session-a")
     assert response =~ ~s(phx-hook="ChatComposer")
+    assert response =~ ~s(phx-change="change_message")
     assert response =~ ~s(name="message")
-    assert response =~ "bg-base-200/80"
+    assert response =~ "bg-base-200/70"
     assert response =~ "textarea-ghost"
     refute response =~ "textarea-bordered"
-    assert response =~ "Message session-a"
+    assert response =~ "Ask session-a"
     assert response =~ ~r/<textarea[^>]*class="[^"]*\bw-full\b/
     assert response =~ ~s(aria-label="Send message")
     assert response =~ "btn-square"
@@ -608,6 +609,23 @@ defmodule PadoLocalWeb.SessionLiveTest do
     assert render(view) =~ "5.5"
   end
 
+  test "selecting a model keeps the draft message", %{conn: conn, store: store} do
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Draft prompt"})
+    |> render_change()
+
+    html =
+      view
+      |> element(~s(button[phx-click="select_model"][phx-value-model="gpt-5.5"]))
+      |> render_click()
+
+    assert html =~ ">Draft prompt</textarea>"
+  end
+
   test "selecting intelligence updates the selected session", %{conn: conn, store: store} do
     :ok = Store.save(store, Session.new("session-a"))
 
@@ -619,6 +637,23 @@ defmodule PadoLocalWeb.SessionLiveTest do
 
     assert {:ok, %Session{reasoning_effort: :high}} = Store.load(store, "session-a")
     assert render(view) =~ "High"
+  end
+
+  test "selecting intelligence keeps the draft message", %{conn: conn, store: store} do
+    :ok = Store.save(store, Session.new("session-a"))
+
+    {:ok, view, _html} = live(conn, ~p"/sessions/session-a")
+
+    view
+    |> form("form[data-chat-composer]", %{message: "Draft prompt"})
+    |> render_change()
+
+    html =
+      view
+      |> element(~s(button[phx-click="select_reasoning_effort"][phx-value-effort="high"]))
+      |> render_click()
+
+    assert html =~ ">Draft prompt</textarea>"
   end
 
   test "submitting the chat composer runs the agent and stores the turn", %{
@@ -745,7 +780,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
 
              html =~ ~s(data-tool-execution-start) and
                html =~ ~s(id="session-running-tool-call-bash") and
-               html =~ "Tool call" and
+               html =~ "Run tool" and
                html =~ "sleep 1; printf tool-done"
            end)
 
@@ -757,7 +792,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
                  html =~ ~s(data-tool-execution-start) and
                  html =~ ~s(id="session-entry-tool-call-bash") and
                  html =~ ~s(data-tool-execution-result) and
-                 html =~ "Tool call" and
+                 html =~ "Run tool" and
                  html =~ "tool-done" and
                  html =~ "sleep 1; printf tool-done"
              end,
@@ -800,7 +835,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
              html = render(view)
 
              html =~ ~s(data-tool-execution-updates) and
-               html =~ "Updates" and
+               html =~ "Progress updates" and
                html =~ "Reading output"
            end)
   end
@@ -830,7 +865,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
                   {stream_index, _length} <-
                     :binary.match(html, ~s(id="session-streaming-entry-session-a")) do
                tool_index < stream_index and
-                 html =~ "Tool call" and
+                 html =~ "Run tool" and
                  html =~ "Tool finished"
              else
                :nomatch -> false
@@ -872,7 +907,7 @@ defmodule PadoLocalWeb.SessionLiveTest do
                     :binary.match(html, ~s(id="session-running-tool-call-bash")) do
                stream_index < tool_index and
                  html =~ "Starting response" and
-                 html =~ "Tool call" and
+                 html =~ "Run tool" and
                  html =~ "sleep 1; printf tool-done"
              else
                :nomatch -> false
