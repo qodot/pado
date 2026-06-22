@@ -11,7 +11,7 @@ defmodule PadoLocalWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar border-b border-base-200 bg-base-100 px-4 sm:px-6 lg:px-8">
+    <header class="navbar bg-base-100 px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
         <.link
           navigate={~p"/sessions"}
@@ -82,8 +82,8 @@ defmodule PadoLocalWeb.Layouts do
 
   def theme_toggle(assigns) do
     ~H"""
-    <div class="relative flex flex-row items-center rounded-full border border-base-300 bg-base-200 p-1">
-      <div class="absolute inset-y-1 left-1 w-11 rounded-full border border-base-200 bg-base-100 brightness-200 transition-[left] [[data-theme=light]_&]:left-12 [[data-theme=dark]_&]:left-[5.75rem]" />
+    <div class="relative flex flex-row items-center rounded-full bg-base-200 p-1">
+      <div class="absolute inset-y-1 left-1 w-11 rounded-full bg-base-100 brightness-200 transition-[left] [[data-theme=light]_&]:left-12 [[data-theme=dark]_&]:left-[5.75rem]" />
 
       <button
         type="button"

@@ -446,10 +446,8 @@ defmodule PadoLocalWeb.SessionLiveTest do
     conn = get(conn, ~p"/sessions/session-a")
 
     response = html_response(conn, 200)
-    assert response =~ "Live workspace"
     assert response =~ "session-a"
-    assert response =~ "status-primary"
-    refute response =~ "status-success"
+    refute response =~ "Live workspace"
   end
 
   test "GET /sessions/:id renders stored messages", %{conn: conn, store: store} do

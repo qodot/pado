@@ -53,7 +53,7 @@ defmodule PadoLocalWeb.SessionLive do
     <Layouts.app flash={@flash}>
       <div class="grid h-full grid-cols-1 bg-base-200/55 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <aside class={[
-          "min-h-52 overflow-y-auto border-base-300 bg-base-200/85 lg:block lg:border-r",
+          "min-h-52 overflow-y-auto bg-base-200/85 lg:block",
           @selected_id && "hidden"
         ]}>
           <div class="flex items-center justify-between px-5 py-5">
@@ -69,7 +69,7 @@ defmodule PadoLocalWeb.SessionLive do
                 type="button"
                 phx-click="create_session"
                 aria-label="Start session"
-                class="btn btn-primary btn-square min-h-11 w-11 rounded-full border-0 shadow-none"
+                class="btn btn-primary btn-square min-h-11 w-11 rounded-full shadow-none"
               >
                 <.icon name="hero-plus" class="size-4" />
               </button>
@@ -98,7 +98,7 @@ defmodule PadoLocalWeb.SessionLive do
 
           <div
             :if={@sessions == [] and !@sessions_error}
-            class="mx-3 rounded-box border border-dashed border-base-300 bg-base-100/70 p-4 text-sm text-base-content/65"
+            class="mx-3 rounded-box bg-base-100/70 p-4 text-sm text-base-content/65"
           >
             Start a session to choose a workspace folder.
           </div>
@@ -106,24 +106,6 @@ defmodule PadoLocalWeb.SessionLive do
 
         <section class="min-h-0 bg-base-100">
           <div :if={@selected_id} class="flex h-full flex-col">
-            <div class="border-b border-base-200 px-4 py-4 sm:px-6">
-              <div class="mx-auto flex max-w-4xl items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="status status-primary" />
-                    <p class="text-sm font-semibold text-base-content/60">Live workspace</p>
-                  </div>
-                  <h2 class="mt-1 truncate text-xl font-bold">{@selected_id}</h2>
-                </div>
-                <.link
-                  navigate={~p"/sessions"}
-                  class="btn btn-ghost btn-sm min-h-11 rounded-full lg:hidden"
-                >
-                  Sessions
-                </.link>
-              </div>
-            </div>
-
             <div :if={@selected_session_error} class="p-5">
               <div class="alert alert-error mx-auto max-w-4xl items-start">
                 <.icon name="hero-exclamation-triangle" class="size-5" />
@@ -135,7 +117,7 @@ defmodule PadoLocalWeb.SessionLive do
               :if={@selected_session && @selected_session.entries == []}
               class="flex flex-1 items-center justify-center p-6"
             >
-              <div class="max-w-sm rounded-box border border-dashed border-base-300 bg-base-100 p-6 text-center">
+              <div class="max-w-sm rounded-box bg-base-100 p-6 text-center">
                 <div class="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <.icon name="hero-chat-bubble-left-right" class="size-5" />
                 </div>
@@ -150,9 +132,9 @@ defmodule PadoLocalWeb.SessionLive do
               :if={@selected_session && @selected_session.entries != []}
               id="session-entry-list"
               phx-hook="SessionScroll"
-              class="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+              class="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 py-6 sm:px-6"
             >
-              <div class="mx-auto flex max-w-4xl flex-col gap-5">
+              <div class="mx-auto flex max-w-4xl flex-col gap-3">
                 <.session_entries
                   entries={@selected_session.entries}
                   pending_user_entry_id={
@@ -196,7 +178,7 @@ defmodule PadoLocalWeb.SessionLive do
             :if={!@selected_id}
             class="flex h-full min-h-96 items-center justify-center p-6"
           >
-            <div class="max-w-sm rounded-box border border-base-200 bg-base-100 p-6 text-center">
+            <div class="max-w-sm rounded-box bg-base-100 p-6 text-center">
               <div class="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <.icon name="hero-arrow-left-circle" class="size-5" />
               </div>
