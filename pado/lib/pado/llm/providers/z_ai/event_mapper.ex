@@ -14,13 +14,16 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
       done: false,
       text_started: false,
       partial_text: "",
+      thinking_started: false,
+      partial_thinking: "",
+      stop_reason: nil,
       tool_calls: %{}
     }
   end
 
   defp step(%SSE.Event{data: ""}, state), do: {[], state}
   defp step(%SSE.Event{data: "[DONE]"}, %{done: true} = state), do: {[], state}
-  defp step(%SSE.Event{data: "[DONE]"}, state), do: finish(:stop, nil, state)
+  defp step(%SSE.Event{data: "[DONE]"}, state), do: finish(state)
 
   defp step(%SSE.Event{data: data}, state) do
     case Jason.decode(data) do
@@ -34,41 +37,54 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
   defp handle_chunk(%{"choices" => choices} = chunk, state) when is_list(choices) do
     usage = Map.get(chunk, "usage")
     state = if is_map(usage), do: put_usage(state, usage), else: state
-    {start_events, state} = ensure_started(state)
 
-    {events, state} =
-      Enum.reduce(choices, {start_events, state}, fn choice, {events, state} ->
-        {choice_events, state} = handle_choice(choice, state)
-        {events ++ choice_events, state}
-      end)
-
-    {events, state}
+    Enum.reduce(choices, {[], state}, fn choice, {events, state} ->
+      {choice_events, state} = handle_choice(choice, state)
+      {events ++ choice_events, state}
+    end)
   end
 
   defp handle_chunk(_, state), do: {[], state}
 
   defp handle_choice(%{"delta" => delta} = choice, state) when is_map(delta) do
+    {start_events, state} = ensure_started(state)
     {events, state} = handle_delta(delta, state)
+    state = record_finish_reason(Map.get(choice, "finish_reason"), state)
 
-    case Map.get(choice, "finish_reason") do
-      nil -> {events, state}
-      finish_reason -> finish(finish_reason, events, state)
-    end
+    {start_events ++ events, state}
   end
 
   defp handle_choice(%{"finish_reason" => finish_reason}, state) when not is_nil(finish_reason) do
-    finish(finish_reason, nil, state)
+    {start_events, state} = ensure_started(state)
+    {start_events, record_finish_reason(finish_reason, state)}
   end
 
   defp handle_choice(_, state), do: {[], state}
 
   defp handle_delta(delta, state) do
+    {thinking_events, state} = handle_reasoning_delta(Map.get(delta, "reasoning_content"), state)
     {text_events, state} = handle_content_delta(Map.get(delta, "content"), state)
     {tool_events, state} = handle_tool_calls_delta(Map.get(delta, "tool_calls"), state)
-    {text_events ++ tool_events, state}
+    {thinking_events ++ text_events ++ tool_events, state}
   end
 
+  defp handle_reasoning_delta(content, state) when is_binary(content) and content != "" do
+    events =
+      if state.thinking_started do
+        [{:thinking_delta, %{index: 0, delta: content}}]
+      else
+        [{:thinking_start, %{index: 0}}, {:thinking_delta, %{index: 0, delta: content}}]
+      end
+
+    {events,
+     %{state | thinking_started: true, partial_thinking: state.partial_thinking <> content}}
+  end
+
+  defp handle_reasoning_delta(_, state), do: {[], state}
+
   defp handle_content_delta(content, state) when is_binary(content) and content != "" do
+    {thinking_events, state} = close_thinking(state)
+
     events =
       if state.text_started do
         [{:text_delta, %{index: 0, delta: content}}]
@@ -76,7 +92,8 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
         [{:text_start, %{index: 0}}, {:text_delta, %{index: 0, delta: content}}]
       end
 
-    {events, %{state | text_started: true, partial_text: state.partial_text <> content}}
+    {thinking_events ++ events,
+     %{state | text_started: true, partial_text: state.partial_text <> content}}
   end
 
   defp handle_content_delta(_, state), do: {[], state}
@@ -134,9 +151,10 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
   defp ensure_started(state),
     do: {[{:start, %{message: state.assistant}}], %{state | started: true}}
 
-  defp finish(finish_reason, leading_events, state) do
+  defp finish(state) do
+    {start_events, state} = ensure_started(state)
     {finish_events, state} = finish_open_items(state)
-    stop = stop_reason(finish_reason, state)
+    stop = state.stop_reason || stop_reason(nil, state)
     usage = state.assistant.usage || Usage.empty()
 
     final_msg = %{
@@ -147,13 +165,14 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
     }
 
     events =
-      List.wrap(leading_events) ++
+      start_events ++
         finish_events ++ [{:done, %{stop_reason: stop, usage: usage, message: final_msg}}]
 
     {events, %{state | assistant: final_msg, done: true}}
   end
 
   defp finish_open_items(state) do
+    {thinking_events, state} = close_thinking(state)
     text_events = if state.text_started, do: [{:text_end, %{index: 0}}], else: []
 
     tool_events =
@@ -162,10 +181,17 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
       |> Enum.sort()
       |> Enum.map(&{:tool_call_end, %{index: &1}})
 
-    {text_events ++ tool_events, state}
+    {thinking_events ++ text_events ++ tool_events, state}
   end
 
   defp build_content(state) do
+    thinking =
+      if state.partial_thinking == "" do
+        []
+      else
+        [{:thinking, state.partial_thinking}]
+      end
+
     text =
       if state.partial_text == "" do
         []
@@ -180,8 +206,13 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
         {:tool_call, %{id: call.id, name: call.name, args: decode_args(call.args)}}
       end)
 
-    text ++ tool_calls
+    thinking ++ text ++ tool_calls
   end
+
+  defp close_thinking(%{thinking_started: true} = state),
+    do: {[{:thinking_end, %{index: 0}}], %{state | thinking_started: false}}
+
+  defp close_thinking(state), do: {[], state}
 
   defp decode_args(args) do
     case Jason.decode(args) do
@@ -232,6 +263,9 @@ defmodule Pado.LLM.Providers.ZAI.EventMapper do
         }}
      ], state}
   end
+
+  defp record_finish_reason(nil, state), do: state
+  defp record_finish_reason(reason, state), do: %{state | stop_reason: stop_reason(reason, state)}
 
   defp stop_reason("length", _state), do: :length
   defp stop_reason("tool_calls", _state), do: :tool_use

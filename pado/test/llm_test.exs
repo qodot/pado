@@ -54,4 +54,13 @@ defmodule Pado.LLMTest do
     assert {:error, :missing_account_id} =
              LLM.stream(model, ctx, missing_account_id, "session-1")
   end
+
+  test "Z.AI 어댑터는 크레덴셜을 사전 검증한다" do
+    model = Catalog.ZAI.default()
+    ctx = Context.new(messages: [User.new("안녕")])
+    wrong_provider = Credentials.build(:other_provider, "access", "refresh", 3600)
+
+    assert {:error, {:wrong_provider_credentials, :other_provider}} =
+             LLM.stream(model, ctx, wrong_provider, "session-1")
+  end
 end

@@ -137,4 +137,10 @@ defmodule Pado.LLM.Providers.OpenAICodex.RequestTest do
     assert {"x-client-request-id", session_id} in headers
     assert body["prompt_cache_key"] == session_id
   end
+
+  test "build_body/4는 agent reasoning_effort atom을 Codex 포맷으로 변환한다" do
+    body = Request.build_body(@model, Context.new(), "session-1", reasoning_effort: :high)
+
+    assert body["reasoning"] == %{"effort" => "high", "summary" => "auto"}
+  end
 end

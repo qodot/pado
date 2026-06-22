@@ -6,7 +6,7 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
   alias Pado.LLM.{Context, Model, Tool}
 
   @model %Model{
-    id: "glm-test",
+    id: "glm-5.2",
     provider: :z_ai,
     base_url: "https://api.z.ai/api/paas/v4/"
   }
@@ -43,11 +43,12 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
         tool_stream: true
       )
 
-    assert body["model"] == "glm-test"
+    assert body["model"] == "glm-5.2"
     assert body["stream"] == true
     assert body["temperature"] == 0.2
     assert body["tool_choice"] == "auto"
     assert body["tool_stream"] == true
+    assert body["thinking"] == %{"type" => "enabled"}
     assert body["reasoning_effort"] == "max"
 
     assert body["messages"] == [
@@ -119,16 +120,32 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
   end
 
   test "build_body/4는 agent reasoning_effort를 Z.AI effective 값으로 변환한다" do
-    assert reasoning_effort(:none) == "none"
+    assert thinking(:none) == %{"type" => "disabled"}
+    assert reasoning_effort(:none) == nil
     assert reasoning_effort(:low) == "high"
     assert reasoning_effort(:medium) == "high"
     assert reasoning_effort(:high) == "high"
     assert reasoning_effort(:xhigh) == "max"
+    assert reasoning_effort("max") == "max"
+  end
+
+  test "build_body/4는 GLM-5.2가 아닌 모델에는 reasoning_effort를 보내지 않는다" do
+    model = %Model{@model | id: "glm-5.1"}
+    body = Request.build_body(model, Context.new(), "session-1", reasoning_effort: :high)
+
+    assert body["thinking"] == %{"type" => "enabled"}
+    refute Map.has_key?(body, "reasoning_effort")
   end
 
   defp reasoning_effort(value) do
     @model
     |> Request.build_body(Context.new(), "session-1", reasoning_effort: value)
-    |> Map.fetch!("reasoning_effort")
+    |> Map.get("reasoning_effort")
+  end
+
+  defp thinking(value) do
+    @model
+    |> Request.build_body(Context.new(), "session-1", reasoning_effort: value)
+    |> Map.fetch!("thinking")
   end
 end

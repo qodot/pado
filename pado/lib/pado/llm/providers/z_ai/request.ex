@@ -1,5 +1,5 @@
 defmodule Pado.LLM.Providers.ZAI.Request do
-  alias Pado.LLM.{Context, Model, Tool}
+  alias Pado.LLM.{Context, Model, Tool, ReasoningEffort}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   @endpoint_path "/chat/completions"
@@ -20,7 +20,8 @@ defmodule Pado.LLM.Providers.ZAI.Request do
     |> maybe_put("max_tokens", Keyword.get(opts, :max_tokens))
     |> maybe_put("tool_choice", Keyword.get(opts, :tool_choice))
     |> maybe_put("tool_stream", Keyword.get(opts, :tool_stream))
-    |> maybe_put("reasoning_effort", build_reasoning_effort(opts))
+    |> maybe_put("thinking", build_thinking(opts))
+    |> maybe_put("reasoning_effort", build_reasoning_effort(model, opts))
     |> maybe_put("tools", encode_tools(ctx.tools))
   end
 
@@ -134,23 +135,36 @@ defmodule Pado.LLM.Providers.ZAI.Request do
     end)
   end
 
-  defp build_reasoning_effort(opts) do
-    case Keyword.get(opts, :reasoning_effort) do
+  defp build_thinking(opts) do
+    case normalized_reasoning_effort(opts) do
       nil -> nil
-      :none -> "none"
-      :low -> "high"
-      :medium -> "high"
-      :high -> "high"
-      :xhigh -> "max"
-      "none" -> "none"
-      "minimal" -> "none"
-      "low" -> "high"
-      "medium" -> "high"
-      "high" -> "high"
-      "xhigh" -> "max"
-      "max" -> "max"
+      effort when effort in ["none", "minimal"] -> %{"type" => "disabled"}
+      _ -> %{"type" => "enabled"}
     end
   end
+
+  defp build_reasoning_effort(%Model{id: "glm-5.2"}, opts) do
+    opts
+    |> normalized_reasoning_effort()
+    |> to_zai_reasoning_effort()
+  end
+
+  defp build_reasoning_effort(_model, _opts), do: nil
+
+  defp normalized_reasoning_effort(opts) do
+    opts
+    |> Keyword.get(:reasoning_effort)
+    |> ReasoningEffort.normalize()
+  end
+
+  defp to_zai_reasoning_effort(nil), do: nil
+  defp to_zai_reasoning_effort("none"), do: nil
+  defp to_zai_reasoning_effort("minimal"), do: nil
+  defp to_zai_reasoning_effort("low"), do: "high"
+  defp to_zai_reasoning_effort("medium"), do: "high"
+  defp to_zai_reasoning_effort("high"), do: "high"
+  defp to_zai_reasoning_effort("xhigh"), do: "max"
+  defp to_zai_reasoning_effort("max"), do: "max"
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
