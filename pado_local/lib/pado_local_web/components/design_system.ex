@@ -19,15 +19,24 @@ defmodule PadoLocalWeb.DesignSystem do
     <li>
       <.link
         navigate={@navigate}
+        aria-current={@active && "page"}
         class={[
-          "px-2",
-          @active && "font-semibold text-primary"
+          "group flex min-h-16 items-center rounded-box px-3 py-2 transition-colors",
+          @active && "bg-primary/10 text-primary",
+          !@active && "hover:bg-base-100/75"
         ]}
       >
-        <div class="flex min-w-0 flex-1 flex-col gap-1">
-          <span class="truncate font-medium">{@id}</span>
-          <span class="truncate text-xs opacity-50" title={@cwd}>{@cwd}</span>
-          <span class="text-xs opacity-60">{format_updated_at(@updated_at)}</span>
+        <div class="flex min-w-0 flex-1 items-start gap-3">
+          <span class={[
+            "mt-1 size-2 shrink-0 rounded-full",
+            @active && "bg-primary",
+            !@active && "bg-base-content/20 group-hover:bg-primary/50"
+          ]} />
+          <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="truncate text-sm font-bold">{@id}</span>
+            <span class="truncate text-xs text-base-content/50" title={@cwd}>{@cwd}</span>
+            <span class="text-xs text-base-content/55">{format_updated_at(@updated_at)}</span>
+          </div>
         </div>
       </.link>
     </li>
@@ -56,13 +65,16 @@ defmodule PadoLocalWeb.DesignSystem do
   def session_entry(assigns) do
     ~H"""
     <div :if={@entry.kind == :user} data-entry-kind="user" class="flex justify-end">
-      <div class="max-w-[min(32rem,75%)] rounded-lg bg-base-200 px-3 py-2 text-sm leading-6 text-base-content">
+      <div class="max-w-[min(34rem,82%)] rounded-box rounded-tr-sm bg-primary px-4 py-3 text-sm leading-6 text-primary-content">
         <p class="whitespace-pre-wrap break-words">{entry_text(@entry)}</p>
       </div>
     </div>
 
     <div :if={@entry.kind != :user} data-entry-kind={entry_kind(@entry)} class="py-2">
-      <div :if={entry_label(@entry)} class="mb-1 text-xs text-base-content/45">
+      <div
+        :if={entry_label(@entry)}
+        class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/45"
+      >
         {entry_label(@entry)}
       </div>
       <div class="space-y-3">
@@ -73,7 +85,7 @@ defmodule PadoLocalWeb.DesignSystem do
           >
             <.icon name="hero-exclamation-triangle" class="mt-0.5 size-4 shrink-0" />
             <div class="min-w-0">
-              <div class="font-medium">{part.title}</div>
+              <div class="font-bold">{part.title}</div>
               <div class="mt-1 break-words text-xs leading-5 opacity-80">{part.text}</div>
             </div>
           </div>
@@ -142,14 +154,16 @@ defmodule PadoLocalWeb.DesignSystem do
   def session_running_tool(assigns) do
     ~H"""
     <div id={@id} data-tool-execution-start class="w-full py-2">
-      <div class="flex w-full flex-col rounded-lg bg-base-200 text-sm text-base-content/70">
-        <div class="flex w-full items-center gap-2 px-3 py-2">
-          <.icon name="hero-wrench-screwdriver" class="size-4 shrink-0 text-primary" />
-          <span class="shrink-0 font-medium text-base-content">Tool call</span>
-          <span class="badge badge-neutral badge-sm shrink-0">{@tool.name}</span>
+      <div class="flex w-full flex-col overflow-hidden rounded-box border border-base-300 bg-base-200/70 text-sm text-base-content/70">
+        <div class="flex w-full items-center gap-2 px-3 py-2.5">
+          <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <.icon name="hero-wrench-screwdriver" class="size-4" />
+          </span>
+          <span class="shrink-0 font-bold text-base-content">Run tool</span>
+          <span class="badge badge-neutral badge-sm shrink-0 rounded-full">{@tool.name}</span>
           <code
             :if={tool_args_summary(@tool.args) != ""}
-            class="min-w-0 truncate rounded bg-base-300 px-1.5 py-0.5 text-xs text-base-content/70"
+            class="min-w-0 truncate rounded bg-base-100 px-2 py-1 text-xs text-base-content/70"
           >
             {tool_args_summary(@tool.args)}
           </code>
@@ -159,12 +173,12 @@ defmodule PadoLocalWeb.DesignSystem do
           data-tool-execution-result
           class="group border-t border-base-300"
         >
-          <summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-base-content/55 select-none">
+          <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-base-content/55 select-none">
             <.icon
               name="hero-chevron-right"
               class="size-3 shrink-0 transition-transform group-open:rotate-90"
             />
-            <span>Result</span>
+            <span>Tool result</span>
           </summary>
           <div class="markdown-content break-words px-3 pb-3 text-sm leading-7 text-base-content/80">
             {markdown_html(message_text(@result))}
@@ -175,7 +189,7 @@ defmodule PadoLocalWeb.DesignSystem do
           data-tool-execution-updates
           class="border-t border-base-300 px-3 py-2"
         >
-          <div class="mb-1 text-xs font-medium text-base-content/55">Updates</div>
+          <div class="mb-1 text-xs font-semibold text-base-content/55">Progress updates</div>
           <div class="flex flex-col gap-1">
             <div
               :for={update <- Map.get(@tool, :updates, [])}
@@ -204,15 +218,16 @@ defmodule PadoLocalWeb.DesignSystem do
       id={@id}
       data-chat-composer
       phx-hook="ChatComposer"
+      phx-change="change_message"
       phx-submit="send_message"
-      class="bg-base-200/80 px-6 py-5"
+      class="border-t border-base-200 bg-base-100 px-4 py-4 sm:px-6"
     >
-      <div class="flex w-full flex-col gap-2">
+      <div class="mx-auto flex max-w-4xl flex-col gap-2 rounded-box border border-base-300 bg-base-200/70 p-3">
         <textarea
           name="message"
           rows="1"
-          placeholder={"Message #{@session_id}"}
-          class="textarea textarea-ghost min-h-12 w-full resize-none bg-transparent px-0 leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
+          placeholder={"Ask #{short_session_id(@session_id)}"}
+          class="textarea textarea-ghost min-h-12 w-full resize-none bg-transparent px-1 text-sm leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
           phx-no-format
         >{@message}</textarea>
         <div class="flex items-center justify-between gap-3">
@@ -226,7 +241,7 @@ defmodule PadoLocalWeb.DesignSystem do
           <button
             type="submit"
             aria-label="Send message"
-            class="btn btn-primary btn-square shrink-0 rounded-full border-0 shadow-none"
+            class="btn btn-primary btn-square min-h-11 w-11 shrink-0 rounded-full border-0 shadow-none"
           >
             <.icon name="hero-paper-airplane" class="size-4" />
           </button>
@@ -246,7 +261,7 @@ defmodule PadoLocalWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select model"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal shadow-none"
+        class="btn btn-ghost btn-sm min-h-11 rounded-full border-0 px-3 font-semibold shadow-none"
       >
         <span class="truncate">{model_label(@selected)}</span>
         <.icon name="hero-chevron-down" class="size-3" />
@@ -261,7 +276,7 @@ defmodule PadoLocalWeb.DesignSystem do
             phx-click="select_model"
             phx-value-model={model.id}
             class={[
-              "justify-between",
+              "min-h-11 justify-between",
               model.id == @selected && "active"
             ]}
           >
@@ -283,8 +298,8 @@ defmodule PadoLocalWeb.DesignSystem do
       <button
         type="button"
         tabindex="0"
-        aria-label="Select intelligence"
-        class="btn btn-ghost btn-sm h-8 min-h-8 rounded-full border-0 px-2 font-normal shadow-none"
+        aria-label="Select reasoning effort"
+        class="btn btn-ghost btn-sm min-h-11 rounded-full border-0 px-3 font-semibold shadow-none"
       >
         <.icon name="hero-bolt" class="size-4 text-primary" />
         <span>{reasoning_effort_label(@selected)}</span>
@@ -300,7 +315,7 @@ defmodule PadoLocalWeb.DesignSystem do
             phx-click="select_reasoning_effort"
             phx-value-effort={effort}
             class={[
-              "justify-between",
+              "min-h-11 justify-between",
               effort == @selected && "active"
             ]}
           >
@@ -472,6 +487,9 @@ defmodule PadoLocalWeb.DesignSystem do
   rescue
     _error -> Phoenix.HTML.html_escape(text)
   end
+
+  defp short_session_id("session-" <> rest), do: "session-#{String.slice(rest, 0, 8)}"
+  defp short_session_id(session_id), do: session_id
 
   defp model_label(nil), do: "Model"
   defp model_label("gpt-" <> label), do: String.replace(label, "-", " ")
