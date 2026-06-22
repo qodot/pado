@@ -715,11 +715,13 @@ defmodule PadoLocalWeb.SessionLiveTest do
     assert_receive {:fake_router_delaying, _router_pid}, 1_000
     assert duration < 500
     assert html =~ "Hello while streaming"
+    assert html =~ ~s(data-loading-message-text)
     refute html =~ "Hello from stream"
     assert_push_event view, "clear-chat-composer", %{id: "chat-composer-session-a"}
 
     assert eventually(fn ->
-             render(view) =~ "Hello from stream"
+             html = render(view)
+             html =~ "Hello from stream" and not (html =~ ~s(data-loading-message-text))
            end)
   end
 

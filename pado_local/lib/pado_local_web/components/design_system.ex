@@ -44,6 +44,7 @@ defmodule PadoLocalWeb.DesignSystem do
   end
 
   attr :entries, :list, required: true
+  attr :pending_user_entry_id, :string, default: nil
 
   def session_entries(assigns) do
     assigns =
@@ -55,18 +56,21 @@ defmodule PadoLocalWeb.DesignSystem do
       :if={!grouped_tool_result?(@tool_results_by_call_id, entry)}
       entry={entry}
       tool_results_by_call_id={@tool_results_by_call_id}
+      loading={entry.id == @pending_user_entry_id}
     />
     """
   end
 
   attr :entry, Entry, required: true
   attr :tool_results_by_call_id, :map, default: %{}
+  attr :loading, :boolean, default: false
 
   def session_entry(assigns) do
     ~H"""
     <div :if={@entry.kind == :user} data-entry-kind="user" class="flex justify-end">
       <div class="max-w-[min(34rem,82%)] rounded-box rounded-tr-sm bg-primary px-4 py-3 text-sm leading-6 text-primary-content">
-        <p class="whitespace-pre-wrap break-words">{entry_text(@entry)}</p>
+        <.loading_message_text :if={@loading} text={entry_text(@entry)} />
+        <p :if={!@loading} class="whitespace-pre-wrap break-words">{entry_text(@entry)}</p>
       </div>
     </div>
 
@@ -112,6 +116,19 @@ defmodule PadoLocalWeb.DesignSystem do
         </div>
       </div>
     </div>
+    """
+  end
+
+  attr :text, :string, required: true
+
+  def loading_message_text(assigns) do
+    ~H"""
+    <p
+      data-loading-message-text
+      aria-busy="true"
+      class="pado-shimmer-text whitespace-pre-wrap break-words"
+      phx-no-format
+    >{@text}</p>
     """
   end
 

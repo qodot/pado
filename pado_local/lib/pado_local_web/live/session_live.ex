@@ -153,7 +153,17 @@ defmodule PadoLocalWeb.SessionLive do
               class="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
             >
               <div class="mx-auto flex max-w-4xl flex-col gap-5">
-                <.session_entries entries={@selected_session.entries} />
+                <.session_entries
+                  entries={@selected_session.entries}
+                  pending_user_entry_id={
+                    pending_user_entry_id(
+                      @selected_session,
+                      @selected_id,
+                      @running_session_id,
+                      @streaming_order
+                    )
+                  }
+                />
                 <%= for item <- streaming_items(@streaming_order, @streaming_response, @streaming_tools) do %>
                   <.session_running_tool
                     :if={item.kind == :tool}
@@ -523,6 +533,25 @@ defmodule PadoLocalWeb.SessionLive do
       if item in order, do: order, else: order ++ [item]
     end)
   end
+
+  defp pending_user_entry_id(
+         %Session{id: id, entries: entries},
+         selected_id,
+         running_session_id,
+         []
+       )
+       when id == selected_id and id == running_session_id do
+    entries
+    |> Enum.reverse()
+    |> Enum.find(&(&1.kind == :user))
+    |> case do
+      %{id: id} -> id
+      nil -> nil
+    end
+  end
+
+  defp pending_user_entry_id(_session, _selected_id, _running_session_id, _streaming_order),
+    do: nil
 
   defp streaming_items(order, response, tools) do
     tools_by_id = Map.new(tools, &{&1.id, &1})
