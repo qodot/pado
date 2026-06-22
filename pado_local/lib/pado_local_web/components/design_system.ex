@@ -21,22 +21,15 @@ defmodule PadoLocalWeb.DesignSystem do
         navigate={@navigate}
         aria-current={@active && "page"}
         class={[
-          "group flex min-h-16 items-center rounded-box px-3 py-2 transition-colors",
+          "group flex min-h-14 items-center rounded-box px-3 py-2 transition-colors",
           @active && "bg-primary/10 text-primary",
           !@active && "hover:bg-base-100/75"
         ]}
       >
-        <div class="flex min-w-0 flex-1 items-start gap-3">
-          <span class={[
-            "mt-1 size-2 shrink-0 rounded-full",
-            @active && "bg-primary",
-            !@active && "bg-base-content/20 group-hover:bg-primary/50"
-          ]} />
-          <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-sm font-bold">{@id}</span>
-            <span class="truncate text-xs text-base-content/50" title={@cwd}>{@cwd}</span>
-            <span class="text-xs text-base-content/55">{format_updated_at(@updated_at)}</span>
-          </div>
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="truncate text-sm font-semibold">{@id}</span>
+          <span class="truncate text-xs text-base-content/50" title={@cwd}>{@cwd}</span>
+          <span class="text-xs text-base-content/55">{format_updated_at(@updated_at)}</span>
         </div>
       </.link>
     </li>
@@ -237,9 +230,9 @@ defmodule PadoLocalWeb.DesignSystem do
       phx-hook="ChatComposer"
       phx-change="change_message"
       phx-submit="send_message"
-      class="bg-base-100 overflow-y-auto [scrollbar-gutter:stable] px-4 py-4 sm:px-6"
+      class="overflow-visible bg-base-100 px-4 py-3 sm:px-6"
     >
-      <div class="mx-auto flex max-w-4xl flex-col gap-2 rounded-box bg-base-200/70 p-3">
+      <div class="mx-auto flex max-w-4xl flex-col gap-1.5 rounded-box bg-base-200/70 p-2.5">
         <textarea
           name="message"
           rows="1"
@@ -247,7 +240,7 @@ defmodule PadoLocalWeb.DesignSystem do
           class="textarea textarea-ghost min-h-12 w-full resize-none bg-transparent px-1 text-sm leading-6 focus:bg-transparent focus:!outline-none focus-visible:!outline-none focus-within:!outline-none"
           phx-no-format
         >{@message}</textarea>
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center justify-between gap-2">
           <div class="flex min-w-0 flex-wrap items-center gap-1">
             <.model_selector selected={@model} options={@model_options} />
             <.reasoning_effort_selector
@@ -258,7 +251,7 @@ defmodule PadoLocalWeb.DesignSystem do
           <button
             type="submit"
             aria-label="Send message"
-            class="btn btn-primary btn-square min-h-11 w-11 shrink-0 rounded-full shadow-none"
+            class="btn btn-primary btn-square min-h-11 w-11 shrink-0 rounded-box shadow-none"
           >
             <.icon name="hero-paper-airplane" class="size-4" />
           </button>
@@ -278,14 +271,14 @@ defmodule PadoLocalWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select model"
-        class="btn btn-ghost btn-sm min-h-11 rounded-full px-3 font-semibold shadow-none"
+        class="btn btn-ghost btn-xs h-8 min-h-8 items-center rounded-box px-2 font-medium leading-4 shadow-none"
       >
         <span class="truncate">{model_label(@selected)}</span>
         <.icon name="hero-chevron-down" class="size-3" />
       </button>
       <ul
         tabindex="0"
-        class="dropdown-content menu z-10 mb-2 w-56 rounded-box bg-base-100 p-2 shadow-none"
+        class="dropdown-content menu z-50 mb-1 max-h-[min(20rem,calc(100vh-8rem))] w-52 overflow-y-auto rounded-box bg-base-100 p-1 shadow-none"
       >
         <li :for={model <- @options}>
           <button
@@ -293,12 +286,12 @@ defmodule PadoLocalWeb.DesignSystem do
             phx-click="select_model"
             phx-value-model={model.id}
             class={[
-              "min-h-11 justify-between",
+              "min-h-8 content-center items-center justify-between rounded-box px-2 py-1 text-xs leading-4",
               model.id == @selected && "active"
             ]}
           >
             <span>{model_label(model.id)}</span>
-            <.icon :if={model.id == @selected} name="hero-check" class="size-4" />
+            <.icon :if={model.id == @selected} name="hero-check" class="size-3" />
           </button>
         </li>
       </ul>
@@ -316,15 +309,15 @@ defmodule PadoLocalWeb.DesignSystem do
         type="button"
         tabindex="0"
         aria-label="Select reasoning effort"
-        class="btn btn-ghost btn-sm min-h-11 rounded-full px-3 font-semibold shadow-none"
+        class="btn btn-ghost btn-xs h-8 min-h-8 items-center rounded-box px-2 font-medium leading-4 shadow-none"
       >
-        <.icon name="hero-bolt" class="size-4 text-primary" />
+        <.icon name="hero-bolt" class="size-3 text-primary" />
         <span>{reasoning_effort_label(@selected)}</span>
         <.icon name="hero-chevron-down" class="size-3" />
       </button>
       <ul
         tabindex="0"
-        class="dropdown-content menu z-10 mb-2 w-44 rounded-box bg-base-100 p-2 shadow-none"
+        class="dropdown-content menu z-50 mb-1 w-36 rounded-box bg-base-100 p-1 shadow-none"
       >
         <li :for={effort <- @options}>
           <button
@@ -332,12 +325,12 @@ defmodule PadoLocalWeb.DesignSystem do
             phx-click="select_reasoning_effort"
             phx-value-effort={effort}
             class={[
-              "min-h-11 justify-between",
+              "min-h-8 content-center items-center justify-between rounded-box px-2 py-1 text-xs leading-4",
               effort == @selected && "active"
             ]}
           >
             <span>{reasoning_effort_label(effort)}</span>
-            <.icon :if={effort == @selected} name="hero-check" class="size-4" />
+            <.icon :if={effort == @selected} name="hero-check" class="size-3" />
           </button>
         </li>
       </ul>

@@ -56,24 +56,16 @@ defmodule PadoLocalWeb.SessionLive do
           "min-h-52 overflow-y-auto bg-base-200/85 lg:block",
           @selected_id && "hidden"
         ]}>
-          <div class="flex items-center justify-between px-5 py-5">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/55">
-                Workspace
-              </p>
-              <h1 class="text-lg font-bold">Sessions</h1>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="badge badge-neutral badge-sm rounded-full">{length(@sessions)}</span>
-              <button
-                type="button"
-                phx-click="create_session"
-                aria-label="Start session"
-                class="btn btn-primary btn-square min-h-11 w-11 rounded-full shadow-none"
-              >
-                <.icon name="hero-plus" class="size-4" />
-              </button>
-            </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <h1 class="text-base font-semibold">Sessions</h1>
+            <button
+              type="button"
+              phx-click="create_session"
+              aria-label="Start session"
+              class="btn btn-primary btn-square min-h-10 w-10 rounded-box shadow-none"
+            >
+              <.icon name="hero-plus" class="size-4" />
+            </button>
           </div>
 
           <div :if={@sessions_error} class="p-3">
