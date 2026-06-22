@@ -160,11 +160,7 @@ defmodule Pado.LLM.Providers.ZAI.Request do
   defp to_zai_reasoning_effort(nil), do: nil
   defp to_zai_reasoning_effort("none"), do: nil
   defp to_zai_reasoning_effort("minimal"), do: nil
-  defp to_zai_reasoning_effort("low"), do: "high"
-  defp to_zai_reasoning_effort("medium"), do: "high"
-  defp to_zai_reasoning_effort("high"), do: "high"
-  defp to_zai_reasoning_effort("xhigh"), do: "max"
-  defp to_zai_reasoning_effort("max"), do: "max"
+  defp to_zai_reasoning_effort(effort), do: effort
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

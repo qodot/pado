@@ -12,4 +12,5 @@ defmodule Pado.LLM.ReasoningEffort do
   def normalize("high"), do: "high"
   def normalize("xhigh"), do: "xhigh"
   def normalize("max"), do: "max"
+  def normalize(_), do: nil
 end

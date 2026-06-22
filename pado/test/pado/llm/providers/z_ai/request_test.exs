@@ -3,7 +3,7 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
 
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
   alias Pado.LLM.Providers.ZAI.Request
-  alias Pado.LLM.{Context, Model, Tool}
+  alias Pado.LLM.{Catalog, Context, Model, Tool}
 
   @model %Model{
     id: "glm-5.2",
@@ -49,7 +49,7 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
     assert body["tool_choice"] == "auto"
     assert body["tool_stream"] == true
     assert body["thinking"] == %{"type" => "enabled"}
-    assert body["reasoning_effort"] == "max"
+    assert body["reasoning_effort"] == "xhigh"
 
     assert body["messages"] == [
              %{"role" => "system", "content" => "한국어로 답한다."},
@@ -122,11 +122,18 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
   test "build_body/4는 agent reasoning_effort를 Z.AI effective 값으로 변환한다" do
     assert thinking(:none) == %{"type" => "disabled"}
     assert reasoning_effort(:none) == nil
-    assert reasoning_effort(:low) == "high"
-    assert reasoning_effort(:medium) == "high"
+    assert reasoning_effort(:low) == "low"
+    assert reasoning_effort(:medium) == "medium"
     assert reasoning_effort(:high) == "high"
-    assert reasoning_effort(:xhigh) == "max"
+    assert reasoning_effort(:xhigh) == "xhigh"
     assert reasoning_effort("max") == "max"
+  end
+
+  test "build_body/4는 알 수 없는 reasoning_effort를 보내지 않는다" do
+    body = Request.build_body(@model, Context.new(), "session-1", reasoning_effort: :unknown)
+
+    refute Map.has_key?(body, "thinking")
+    refute Map.has_key?(body, "reasoning_effort")
   end
 
   test "build_body/4는 GLM-5.2가 아닌 모델에는 reasoning_effort를 보내지 않는다" do
@@ -135,6 +142,14 @@ defmodule Pado.LLM.Providers.ZAI.RequestTest do
 
     assert body["thinking"] == %{"type" => "enabled"}
     refute Map.has_key?(body, "reasoning_effort")
+  end
+
+  test "build_body/4는 Z.AI catalog 모델에 thinking 파라미터를 보낸다" do
+    for model <- Catalog.ZAI.all() do
+      body = Request.build_body(model, Context.new(), "session-1", reasoning_effort: :none)
+
+      assert body["thinking"] == %{"type" => "disabled"}
+    end
   end
 
   defp reasoning_effort(value) do
