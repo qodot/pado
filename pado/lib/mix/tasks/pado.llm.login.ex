@@ -6,7 +6,9 @@ defmodule Mix.Tasks.Pado.Llm.Login do
 
   @provider_aliases %{
     "openai-codex" => Pado.LLM.Credential.OAuth.OpenAICodex,
-    "openai_codex" => Pado.LLM.Credential.OAuth.OpenAICodex
+    "openai_codex" => Pado.LLM.Credential.OAuth.OpenAICodex,
+    "z-ai" => Pado.LLM.Credential.ApiKey.ZAI,
+    "z_ai" => Pado.LLM.Credential.ApiKey.ZAI
   }
 
   @switches [

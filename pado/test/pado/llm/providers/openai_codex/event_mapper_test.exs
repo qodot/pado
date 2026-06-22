@@ -3,7 +3,8 @@ defmodule Pado.LLM.Providers.OpenAICodex.EventMapperTest do
 
   alias Pado.LLM.Message.Assistant
   alias Pado.LLM.Model
-  alias Pado.LLM.Providers.OpenAICodex.{EventMapper, SSE}
+  alias Pado.LLM.SSE
+  alias Pado.LLM.Providers.OpenAICodex.EventMapper
 
   @model %Model{
     id: "gpt-test",

@@ -1,7 +1,7 @@
 defmodule Pado.LLM.Providers.OpenAICodex.SSETest do
   use ExUnit.Case, async: true
 
-  alias Pado.LLM.Providers.OpenAICodex.SSE
+  alias Pado.LLM.SSE
 
   test "parse_chunk/2는 완성된 SSE 블록을 이벤트로 파싱한다" do
     chunk = "event: response.created\nid: evt_1\ndata: {\"type\":\"response.created\"}\n\n"

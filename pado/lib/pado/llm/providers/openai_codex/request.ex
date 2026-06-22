@@ -1,5 +1,5 @@
 defmodule Pado.LLM.Providers.OpenAICodex.Request do
-  alias Pado.LLM.{Context, Model, Tool}
+  alias Pado.LLM.{Context, Model, Tool, ReasoningEffort}
   alias Pado.LLM.Message.{Assistant, ToolResult, User}
 
   @endpoint_path "/codex/responses"
@@ -132,11 +132,11 @@ defmodule Pado.LLM.Providers.OpenAICodex.Request do
   end
 
   defp build_reasoning(opts) do
-    case Keyword.get(opts, :reasoning_effort) do
+    case opts |> Keyword.get(:reasoning_effort) |> ReasoningEffort.normalize() do
       nil ->
         nil
 
-      effort when is_binary(effort) ->
+      effort ->
         %{
           "effort" => effort,
           "summary" => Keyword.get(opts, :reasoning_summary, "auto")

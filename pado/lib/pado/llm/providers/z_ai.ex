@@ -1,10 +1,10 @@
-defmodule Pado.LLM.Providers.OpenAICodex do
+defmodule Pado.LLM.Providers.ZAI do
   @behaviour Pado.LLM.Provider
 
-  alias Pado.LLM.{Context, Model, SSE}
-  alias Pado.LLM.Stream, as: RouterStream
   alias Pado.LLM.Credential.OAuth.Credentials
-  alias Pado.LLM.Providers.OpenAICodex.{EventMapper, Request}
+  alias Pado.LLM.Stream, as: RouterStream
+  alias Pado.LLM.Providers.ZAI.{EventMapper, Request}
+  alias Pado.LLM.{Context, Model, SSE}
 
   @finch_pool Req.Finch
   @default_receive_timeout 300_000
@@ -13,41 +13,22 @@ defmodule Pado.LLM.Providers.OpenAICodex do
 
   @impl true
   def stream(
-        %Model{provider: :openai_codex} = model,
+        %Model{provider: :z_ai} = model,
         %Context{} = ctx,
-        %Credentials{
-          provider: :openai_codex,
-          access: access,
-          extra: %{"account_id" => account_id}
-        },
+        %Credentials{provider: :z_ai, access: api_key},
         session_id,
         opts
       ) do
     url = Request.endpoint_url(model)
-    headers = Request.build_headers(access, account_id, session_id, opts)
+    headers = Request.build_headers(api_key, session_id, opts)
     body = Request.build_body(model, ctx, session_id, opts) |> Jason.encode!()
 
     stream = open_stream(url, headers, body, model, opts)
     {:ok, stream}
   end
 
-  def stream(
-        %Model{provider: :openai_codex},
-        _ctx,
-        %Credentials{provider: :openai_codex},
-        _session_id,
-        _opts
-      ),
-      do: {:error, :missing_account_id}
-
-  def stream(
-        %Model{provider: :openai_codex},
-        _ctx,
-        %Credentials{provider: provider},
-        _session_id,
-        _opts
-      ),
-      do: {:error, {:wrong_provider_credentials, provider}}
+  def stream(%Model{provider: :z_ai}, _ctx, %Credentials{provider: provider}, _session_id, _opts),
+    do: {:error, {:wrong_provider_credentials, provider}}
 
   def stream(%Model{provider: provider}, _ctx, _credentials, _session_id, _opts),
     do: {:error, {:unsupported_provider, provider}}

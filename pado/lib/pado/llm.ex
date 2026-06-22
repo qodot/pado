@@ -2,7 +2,8 @@ defmodule Pado.LLM do
   alias Pado.LLM.{Context, Model}
 
   @provider_map %{
-    openai_codex: Pado.LLM.Providers.OpenAICodex
+    openai_codex: Pado.LLM.Providers.OpenAICodex,
+    z_ai: Pado.LLM.Providers.ZAI
   }
 
   def stream(

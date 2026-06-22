@@ -1,4 +1,4 @@
-defmodule Pado.LLM.Providers.OpenAICodex.SSE do
+defmodule Pado.LLM.SSE do
   defmodule Event do
     @type t :: %__MODULE__{
             event: String.t() | nil,
